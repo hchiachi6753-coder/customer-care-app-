@@ -1,32 +1,82 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
-
 import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
+import {onDocumentCreated} from "firebase-functions/v2/firestore";
+import {initializeApp} from "firebase-admin/app";
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// Import types
+import {Contract, Task, TaskType} from "./types/schema";
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
+initializeApp();
+const db = getFirestore();
+
 setGlobalOptions({ maxInstances: 10 });
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+export const onContractCreated = onDocumentCreated(
+  "contracts/{contractId}",
+  async (event) => {
+    const contractData = event.data?.data() as Contract;
+    const contractId = event.params.contractId;
+
+    if (!contractData) {
+      logger.error("No contract data found");
+      return;
+    }
+
+    const startDate = contractData.startDate;
+    const agentId = contractData.agentId;
+    const batch = db.batch();
+
+    // Task A: Onboarding (T+0)
+    const onboardingTask: Omit<Task, 'id'> = {
+      contractId,
+      agentId,
+      dueDate: startDate,
+      taskType: 'onboarding' as TaskType,
+      isCompleted: false,
+      status: 'pending',
+      priority: 'normal'
+    };
+    const onboardingRef = db.collection('tasks').doc();
+    batch.set(onboardingRef, onboardingTask);
+
+    // Task B: First Lesson (T+0)
+    const firstLessonTask: Omit<Task, 'id'> = {
+      contractId,
+      agentId,
+      dueDate: startDate,
+      taskType: 'first_lesson' as TaskType,
+      isCompleted: false,
+      status: 'pending',
+      priority: 'normal'
+    };
+    const firstLessonRef = db.collection('tasks').doc();
+    batch.set(firstLessonRef, firstLessonTask);
+
+    // Monthly Tasks: 24 tasks (T+1 to T+24 months)
+    for (let i = 1; i <= 24; i++) {
+      const dueDate = new Date(startDate.toDate());
+      dueDate.setMonth(dueDate.getMonth() + i);
+      
+      const monthlyTask: Omit<Task, 'id'> = {
+        contractId,
+        agentId,
+        dueDate: Timestamp.fromDate(dueDate),
+        taskType: 'monthly_care' as TaskType,
+        isCompleted: false,
+        status: 'pending',
+        priority: 'normal'
+      };
+      
+      const monthlyRef = db.collection('tasks').doc();
+      batch.set(monthlyRef, monthlyTask);
+    }
+
+    try {
+      await batch.commit();
+      logger.info(`Created 26 tasks for contract ${contractId}`);
+    } catch (error) {
+      logger.error(`Error creating tasks for contract ${contractId}:`, error);
+    }
+  }
+);
