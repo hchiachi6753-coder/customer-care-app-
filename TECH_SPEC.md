@@ -30,16 +30,18 @@
      - Purpose: Daily To-Do List.
      - **Logic & MVP Trade-off:**
        - Query `tasks` by `agentId` (fetch all raw data).
-       - **Client-side Filtering:** Filter for `status == 'pending'` and Sort by `dueDate` in the frontend code.
-       - *Reasoning:* Avoids Firebase Composite Index creation time (blocking "Loading" state).
-       - *Limitation:* Acceptable for MVP. May impact performance if task count exceeds 10k+.
+       - **Client-side Filtering:** Filter for `status == 'pending'` and Sort by `dueDate` in the frontend.
+       - *Reasoning:* Avoids Firebase Composite Index creation time.
      - UI: Card view with status indicators (Overdue/Today).
   2. **Add Contract (`/contracts/new`):**
      - Purpose: New client entry form.
      - Logic: Writes to `contracts` collection -> Triggers Cloud Function.
   3. **My Clients (`/contracts`):**
      - Purpose: View/Search all clients belonging to the agent.
-     - Logic: Query `contracts` by `agentId`, Sort by `startDate` (Desc).
+     - **Logic & MVP Trade-off:**
+       - Query `contracts` by `agentId` (fetch all raw data).
+       - **Client-side Sorting:** Sort by `startDate` (Desc) in the frontend.
+       - *Reasoning:* Avoids complex index requirements for simple queries.
      - UI: Searchable list with direct "Call" action.
 
 ## 5. Forbidden
