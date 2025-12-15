@@ -25,7 +25,7 @@ export default function NewContractPage() {
   const router = useRouter();
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     defaultValues: {
-      type: "新約",
+      type: "new",
       product: "勤學包",
       paymentMethod: "一次付清",
       startDate: new Date().toISOString().split('T')[0]
@@ -130,8 +130,8 @@ export default function NewContractPage() {
               {...register("type")}
               className="h-12 w-full px-4 bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
             >
-              <option value="新約">新約</option>
-              <option value="續約">續約</option>
+              <option value="new">新約</option>
+              <option value="renew">續約</option>
             </select>
           </div>
 
@@ -163,7 +163,7 @@ export default function NewContractPage() {
             </select>
           </div>
 
-          {watchType === "新約" && (
+          {watchType === "new" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 來源
