@@ -11,6 +11,8 @@ interface FormData {
   parentName: string;
   studentName: string;
   phone: string;
+  email?: string;
+  lineId?: string;
   type: ContractType;
   product: string;
   paymentMethod: string;
@@ -18,6 +20,8 @@ interface FormData {
   startDate: string;
   noviceDate: string;
   firstLessonDate: string;
+  joinDate?: string;
+  firstClassDate?: string;
   note?: string;
 }
 
@@ -65,6 +69,8 @@ export default function NewContractPage() {
         parentName: data.parentName,
         studentName: data.studentName,
         phone: data.phone,
+        email: data.email || null,
+        lineId: data.lineId || null,
         type: data.type,
         product: data.product,
         paymentMethod: data.paymentMethod,
@@ -73,6 +79,8 @@ export default function NewContractPage() {
         startDate: Timestamp.fromDate(new Date(data.startDate)),
         noviceDate: Timestamp.fromDate(new Date(data.noviceDate)),
         firstLessonDate: Timestamp.fromDate(new Date(data.firstLessonDate)),
+        joinDate: data.joinDate || null,
+        firstClassDate: data.firstClassDate || null,
         note: data.note || null,
         status: "active"
       };
@@ -143,6 +151,30 @@ export default function NewContractPage() {
             {errors.phone && (
               <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              {...register("email")}
+              className="h-12 w-full px-4 bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
+              placeholder="example@email.com"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Line ID
+            </label>
+            <input
+              type="text"
+              {...register("lineId")}
+              className="h-12 w-full px-4 bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
+              placeholder="Line ID"
+            />
           </div>
 
           <div>
@@ -244,6 +276,28 @@ export default function NewContractPage() {
             {errors.firstLessonDate && (
               <p className="text-red-500 text-sm mt-1">{errors.firstLessonDate.message}</p>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              新手加入日
+            </label>
+            <input
+              type="date"
+              {...register("joinDate")}
+              className="h-12 w-full px-4 bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              首課日
+            </label>
+            <input
+              type="date"
+              {...register("firstClassDate")}
+              className="h-12 w-full px-4 bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
+            />
           </div>
 
           <div>

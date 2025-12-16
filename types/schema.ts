@@ -20,6 +20,8 @@ export interface Contract {
   parentName: string;
   studentName: string;
   phone: string;
+  email?: string;
+  lineId?: string;
   type: ContractType;
   product: string;
   paymentMethod: string;
@@ -28,6 +30,8 @@ export interface Contract {
   startDate: Timestamp; // T=0
   noviceDate: Timestamp;
   firstLessonDate: Timestamp;
+  joinDate?: string; // YYYY-MM-DD
+  firstClassDate?: string; // YYYY-MM-DD
   note?: string;
   status: 'active' | 'risk' | 'finished';
 }
@@ -39,6 +43,10 @@ export interface Task {
   clientName: string;
   parentName: string;
   product: string;
+  email?: string;
+  lineId?: string;
+  joinDate?: string;
+  firstClassDate?: string;
   dueDate: Timestamp;
   taskType: TaskType;
   isCompleted: boolean;

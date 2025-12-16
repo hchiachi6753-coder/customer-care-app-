@@ -30,6 +30,10 @@ export const onContractCreated = onDocumentCreated(
     const clientName = contractData.studentName;
     const parentName = contractData.parentName;
     const product = contractData.product;
+    const email = contractData.email;
+    const lineId = contractData.lineId;
+    const joinDate = contractData.joinDate;
+    const firstClassDate = contractData.firstClassDate;
     const batch = db.batch();
 
     // Task A: Novice Care (use manual noviceDate)
@@ -39,6 +43,10 @@ export const onContractCreated = onDocumentCreated(
       clientName,
       parentName,
       product,
+      email,
+      lineId,
+      joinDate,
+      firstClassDate,
       dueDate: noviceDate as any,
       taskType: 'onboarding' as TaskType,
       isCompleted: false,
@@ -55,6 +63,10 @@ export const onContractCreated = onDocumentCreated(
       clientName,
       parentName,
       product,
+      email,
+      lineId,
+      joinDate,
+      firstClassDate,
       dueDate: firstLessonDate as any,
       taskType: 'first_lesson' as TaskType,
       isCompleted: false,
@@ -75,6 +87,10 @@ export const onContractCreated = onDocumentCreated(
         clientName,
         parentName,
         product,
+        email,
+        lineId,
+        joinDate,
+        firstClassDate,
         dueDate: Timestamp.fromDate(dueDate) as any,
         taskType: 'monthly_care' as TaskType,
         isCompleted: false,
