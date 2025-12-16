@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Contract, ContractType } from "@/types/schema";
 
 interface FormData {
@@ -24,7 +24,7 @@ interface FormData {
 export default function NewContractPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     defaultValues: {
       type: "new",
       product: "勤學包",
@@ -40,6 +40,21 @@ export default function NewContractPage() {
   });
 
   const watchType = watch("type");
+  const watchStartDate = watch("startDate");
+
+  // Auto-update novice and first lesson dates when start date changes
+  useEffect(() => {
+    if (watchStartDate) {
+      // Update novice date to same as start date
+      setValue("noviceDate", watchStartDate);
+      
+      // Update first lesson date to start date + 7 days
+      const startDate = new Date(watchStartDate);
+      const firstLessonDate = new Date(startDate);
+      firstLessonDate.setDate(firstLessonDate.getDate() + 7);
+      setValue("firstLessonDate", firstLessonDate.toISOString().split('T')[0]);
+    }
+  }, [watchStartDate, setValue]);
 
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
