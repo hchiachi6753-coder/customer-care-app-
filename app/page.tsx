@@ -96,7 +96,7 @@ export default function Home() {
                     <h3 className="font-medium text-gray-900">
                       {taskTypeTranslations[task.taskType]}
                     </h3>
-                    <p className="text-sm text-gray-500">合約: {task.contractId}</p>
+                    <p className="text-sm text-gray-500">客戶: {task.clientName}</p>
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-medium ${

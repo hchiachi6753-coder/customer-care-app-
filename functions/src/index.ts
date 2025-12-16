@@ -25,13 +25,15 @@ export const onContractCreated = onDocumentCreated(
 
     const startDate = contractData.startDate;
     const agentId = contractData.agentId;
+    const clientName = contractData.studentName;
     const batch = db.batch();
 
     // Task A: Onboarding (T+0)
     const onboardingTask: Omit<Task, 'id'> = {
       contractId,
       agentId,
-      dueDate: startDate,
+      clientName,
+      dueDate: startDate as any,
       taskType: 'onboarding' as TaskType,
       isCompleted: false,
       status: 'pending',
@@ -44,7 +46,8 @@ export const onContractCreated = onDocumentCreated(
     const firstLessonTask: Omit<Task, 'id'> = {
       contractId,
       agentId,
-      dueDate: startDate,
+      clientName,
+      dueDate: startDate as any,
       taskType: 'first_lesson' as TaskType,
       isCompleted: false,
       status: 'pending',
@@ -61,7 +64,8 @@ export const onContractCreated = onDocumentCreated(
       const monthlyTask: Omit<Task, 'id'> = {
         contractId,
         agentId,
-        dueDate: Timestamp.fromDate(dueDate),
+        clientName,
+        dueDate: Timestamp.fromDate(dueDate) as any,
         taskType: 'monthly_care' as TaskType,
         isCompleted: false,
         status: 'pending',
