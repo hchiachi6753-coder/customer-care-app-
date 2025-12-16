@@ -11,8 +11,8 @@ interface TaskWithId extends Task {
 }
 
 const taskTypeTranslations: Record<TaskType, string> = {
-  onboarding: "🌱 新生關懷",
-  first_lesson: "📚 首課關懷",
+  onboarding: "🌱 新手關懷",
+  first_lesson: "🏠 首課關懷",
   monthly_care: "💝 月度關懷"
 };
 
@@ -133,26 +133,58 @@ export default function Home() {
                   <div className="space-y-3">
                     {tasks.map((task) => {
                       const dateStatus = getDateStatus(task.dueDate);
+                      const todayString = getTodayString();
+                      const taskDateString = getDateString(task.dueDate);
+                      const isOverdue = taskDateString < todayString;
+                      const isToday = taskDateString === todayString;
+                      
                       return (
-                        <div key={task.id} className="bg-white rounded-lg p-4 shadow-sm border">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h3 className="font-medium text-gray-900 text-lg">
-                                {task.clientName}
-                              </h3>
-                              <p className={`text-sm font-medium ${dateStatus.color}`}>
-                                {dateStatus.text}
-                              </p>
+                        <div key={task.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3 relative overflow-hidden border-l-4 border-blue-500">
+                          <div className="flex justify-between items-start">
+                            {/* Left Side - Info */}
+                            <div className="flex-1">
+                              {/* Top Row - Names */}
+                              <div className="mb-2">
+                                <h3 className="text-lg font-bold text-gray-900">
+                                  {task.clientName}
+                                </h3>
+                                <p className="text-sm text-gray-500">
+                                  (家長: {task.parentName})
+                                </p>
+                              </div>
+                              
+                              {/* Middle Row - Product Badge */}
+                              <div className="mb-2">
+                                <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">
+                                  {task.product}
+                                </span>
+                              </div>
+                              
+                              {/* Bottom Row - Date Status */}
+                              <div>
+                                {isOverdue ? (
+                                  <p className="text-red-500 text-sm font-medium">
+                                    ⚠️ 逾期: {formatDateDisplay(task.dueDate)}
+                                  </p>
+                                ) : isToday ? (
+                                  <p className="text-green-600 text-sm font-bold">
+                                    ✅ 今日任務
+                                  </p>
+                                ) : (
+                                  <p className="text-gray-600 text-sm">
+                                    {formatDateDisplay(task.dueDate)}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            {task.priority === 'high' && (
-                              <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                                高優先
-                              </span>
-                            )}
+                            
+                            {/* Right Side - Action */}
+                            <div className="ml-4">
+                              <button className="w-10 h-10 bg-gray-50 text-blue-600 rounded-full flex items-center justify-center hover:bg-blue-50 transition-colors">
+                                📞
+                              </button>
+                            </div>
                           </div>
-                          <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                            📞 撥打電話
-                          </button>
                         </div>
                       );
                     })}
