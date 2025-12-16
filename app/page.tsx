@@ -72,7 +72,7 @@ export default function Home() {
   // Filter tasks by specific types for 3 sections
   const noviceTasks = dueTasks.filter(task => task.taskType === 'onboarding');
   const firstLessonTasks = dueTasks.filter(task => task.taskType === 'first_lesson');
-  const generalTasks = dueTasks.filter(task => task.taskType.startsWith('monthly'));
+  const generalTasks = dueTasks.filter(task => task.taskType === 'monthly_care');
 
   // Task Card Component
   const TaskCard = ({ task, borderColor }: { task: TaskWithId; borderColor: string }) => {
@@ -86,20 +86,20 @@ export default function Home() {
     };
 
     return (
-      <div className={`bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-3 border-l-4 ${borderColor}`}>
+      <div className={`bg-white p-2.5 rounded-xl shadow-sm border border-gray-200 mb-2 border-l-4 ${borderColor}`}>
         {/* Row 1 - Header: Student Name + Contact Icons */}
-        <div className="flex items-center mb-2">
+        <div className="flex items-center justify-between mb-1">
           <h3 
-            className="text-base font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+            className="text-sm font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
             onClick={handleNavigation}
           >
             {task.clientName}
           </h3>
-          <div className="flex gap-2 ml-3">
+          <div className="flex gap-1.5">
             {/* Phone Icon */}
             <button 
               onClick={handleNavigation}
-              className="w-6 h-6 text-gray-400 hover:text-blue-600 transition-colors"
+              className="w-5 h-5 text-gray-400 hover:text-blue-600 transition-colors"
               title={task.parentName ? `電話: ${task.parentName}` : '電話'}
             >
               📞
@@ -108,7 +108,7 @@ export default function Home() {
             {task.email && (
               <button 
                 onClick={handleNavigation}
-                className="w-6 h-6 text-gray-400 hover:text-blue-600 transition-colors"
+                className="w-5 h-5 text-gray-400 hover:text-blue-600 transition-colors"
                 title={`Email: ${task.email}`}
               >
                 ✉️
@@ -118,7 +118,7 @@ export default function Home() {
             {task.lineId && (
               <button 
                 onClick={handleNavigation}
-                className="w-6 h-6 text-gray-400 hover:text-green-600 transition-colors"
+                className="w-5 h-5 text-gray-400 hover:text-green-600 transition-colors"
                 title={`Line: ${task.lineId}`}
               >
                 💬
@@ -127,35 +127,31 @@ export default function Home() {
           </div>
         </div>
         
-        {/* Row 2 - Parent Name */}
-        <div className="mb-2">
-          <p className="text-sm text-gray-500">
-            (家長: {task.parentName})
-          </p>
-        </div>
-        
-        {/* Row 3 - Product Badge */}
-        <div className="mb-3">
-          <span className="inline-block bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium">
-            {task.product}
-          </span>
-        </div>
-        
-        {/* Row 4 - Footer: Date Status (Right Aligned) */}
-        <div className="flex justify-end">
-          {isOverdue ? (
-            <p className="text-red-600 text-sm font-medium">
-              逾期 {formatDateDisplay(task.dueDate)}
+        {/* Row 2 - Parent Name + Product Badge + Date */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-gray-500">
+              (家長: {task.parentName})
             </p>
-          ) : isToday ? (
-            <p className="text-green-600 text-sm font-medium">
-              今日任務
-            </p>
-          ) : (
-            <p className="text-gray-500 text-sm">
-              {formatDateDisplay(task.dueDate)}
-            </p>
-          )}
+            <span className="inline-block bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+              {task.product}
+            </span>
+          </div>
+          <div>
+            {isOverdue ? (
+              <p className="text-red-600 text-xs font-medium">
+                逾期 {formatDateDisplay(task.dueDate)}
+              </p>
+            ) : isToday ? (
+              <p className="text-green-600 text-xs font-medium">
+                今日任務
+              </p>
+            ) : (
+              <p className="text-gray-500 text-xs">
+                {formatDateDisplay(task.dueDate)}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     );

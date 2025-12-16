@@ -54,6 +54,33 @@
   3. **My Clients (`/contracts`):**
      - Purpose: Searchable list of all clients.
 
-## 6. Build & Deployment Configuration (Crucial)
-- **Next.js Config:** Enable empty `turbopack: {}` and exclude `/functions` directory.
-- **Environment Variables:** Required Firebase keys in Vercel.
+## 6. UI Design System (Salesforce Lightning Style)
+- **Layout Pattern:** F-Pattern layout for dashboard
+- **Color Scheme:**
+  - Background: `bg-slate-50`
+  - Cards: `bg-white` with colored left borders
+  - Task Types: Green (newcomer), Blue (first class), Gray (general)
+- **Typography:** Clean, professional fonts with proper hierarchy
+- **Components:**
+  - Cards: `rounded-lg shadow-sm border-l-4`
+  - Buttons: `h-14 rounded-lg font-bold`
+  - Inputs: `h-12 px-4 rounded-lg border-gray-300`
+
+## 7. Customer Detail Page Architecture
+- **Timeline Design:** Vertical timeline with connecting lines
+- **Status Indicators:** Colored dots (green=completed, gray=pending)
+- **Date Formatting:** Localized Chinese date display
+- **Task Grouping:** Chronological order with visual separation
+
+## 8. Data Denormalization Strategy
+- **Purpose:** Avoid N+1 queries on dashboard
+- **Implementation:** Store `clientName`, `parentName`, `product` directly in Task documents
+- **Trade-off:** Slight data redundancy for significant performance gain
+- **Maintenance:** Update denormalized data when contract changes
+
+## 9. Build & Deployment Configuration (Crucial)
+- **Next.js Config:** Enable empty `turbopack: {}` and exclude `/functions` directory
+- **Environment Variables:** Required Firebase keys in Vercel
+- **Deployment Status:** ✅ Successfully deployed to Vercel (frontend) and Firebase (Cloud Functions)
+- **Firebase Functions:** v2 with proper TypeScript configuration
+- **Vercel Settings:** Automatic deployments from main branch

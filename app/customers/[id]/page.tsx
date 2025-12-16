@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Task } from "@/types/schema";
@@ -20,7 +20,8 @@ interface TimelineEvent {
   color: string;
 }
 
-export default function CustomerDetailPage({ params }: { params: { id: string } }) {
+export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
   const [task, setTask] = useState<TaskWithId | null>(null);
   const [allTasks, setAllTasks] = useState<TaskWithId[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -31,7 +32,7 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
     const fetchData = async () => {
       try {
         // Fetch the specific task
-        const taskDoc = await getDoc(doc(db, "tasks", params.id));
+        const taskDoc = await getDoc(doc(db, "tasks", resolvedParams.id));
         if (taskDoc.exists()) {
           const currentTask = { id: taskDoc.id, ...taskDoc.data() } as TaskWithId;
           setTask(currentTask);
@@ -58,7 +59,7 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
     };
 
     fetchData();
-  }, [params.id]);
+  }, [resolvedParams.id]);
 
   const buildTimeline = (tasks: TaskWithId[]) => {
     const events: TimelineEvent[] = [];

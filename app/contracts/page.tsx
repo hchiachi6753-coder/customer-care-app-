@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Contract } from "@/types/schema";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface ContractWithId extends Contract {
   id: string;
@@ -15,6 +16,7 @@ export default function ContractsPage() {
   const [filteredContracts, setFilteredContracts] = useState<ContractWithId[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     const q = query(
@@ -66,8 +68,23 @@ export default function ContractsPage() {
     }
   };
 
-  const handleCall = (phone: string) => {
+  const handleCall = (phone: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     window.location.href = `tel:${phone}`;
+  };
+
+  const handleCustomerClick = async (contractId: string) => {
+    // Find a task for this contract to navigate to customer detail page
+    const tasksQuery = query(
+      collection(db, "tasks"),
+      where("contractId", "==", contractId)
+    );
+    const tasksSnapshot = await getDocs(tasksQuery);
+    
+    if (!tasksSnapshot.empty) {
+      const firstTask = tasksSnapshot.docs[0];
+      router.push(`/customers/${firstTask.id}`);
+    }
   };
 
   return (
@@ -99,7 +116,11 @@ export default function ContractsPage() {
         ) : (
           <div className="space-y-3">
             {filteredContracts.map((contract) => (
-              <div key={contract.id} className="bg-white rounded-lg p-4 shadow-sm border">
+              <div 
+                key={contract.id} 
+                className="bg-white rounded-lg p-4 shadow-sm border cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => handleCustomerClick(contract.id)}
+              >
                 <div className="flex justify-between items-center">
                   <div className="flex-1">
                     <h3 className="font-medium text-gray-900 mb-1">
@@ -110,7 +131,7 @@ export default function ContractsPage() {
                     </p>
                   </div>
                   <button
-                    onClick={() => handleCall(contract.phone)}
+                    onClick={(e) => handleCall(contract.phone, e)}
                     className="ml-4 w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors"
                   >
                     📞
