@@ -24,30 +24,32 @@ export const onContractCreated = onDocumentCreated(
     }
 
     const startDate = contractData.startDate;
+    const noviceDate = contractData.noviceDate;
+    const firstLessonDate = contractData.firstLessonDate;
     const agentId = contractData.agentId;
     const clientName = contractData.studentName;
     const batch = db.batch();
 
-    // Task A: Onboarding (T+0)
-    const onboardingTask: Omit<Task, 'id'> = {
+    // Task A: Novice Care (use manual noviceDate)
+    const noviceTask: Omit<Task, 'id'> = {
       contractId,
       agentId,
       clientName,
-      dueDate: startDate as any,
+      dueDate: noviceDate as any,
       taskType: 'onboarding' as TaskType,
       isCompleted: false,
       status: 'pending',
       priority: 'normal'
     };
-    const onboardingRef = db.collection('tasks').doc();
-    batch.set(onboardingRef, onboardingTask);
+    const noviceRef = db.collection('tasks').doc();
+    batch.set(noviceRef, noviceTask);
 
-    // Task B: First Lesson (T+0)
+    // Task B: First Lesson Care (use manual firstLessonDate)
     const firstLessonTask: Omit<Task, 'id'> = {
       contractId,
       agentId,
       clientName,
-      dueDate: startDate as any,
+      dueDate: firstLessonDate as any,
       taskType: 'first_lesson' as TaskType,
       isCompleted: false,
       status: 'pending',
