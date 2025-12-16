@@ -21,9 +21,13 @@ export interface Contract {
   studentName: string;
   phone: string;
   type: ContractType;
+  product: string;
+  paymentMethod: string;
+  source?: string;
   productCycle: number; // default 24
   startDate: Timestamp; // T=0
   firstLessonDate?: Timestamp | null;
+  note?: string;
   status: 'active' | 'risk' | 'finished';
 }
 
@@ -31,6 +35,7 @@ export interface Task {
   id: string;
   contractId: string;
   agentId: string;
+  clientName: string;
   dueDate: Timestamp;
   taskType: TaskType;
   isCompleted: boolean;

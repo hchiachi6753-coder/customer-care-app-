@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Task, TaskType } from "@/types/schema";
 import Link from "next/link";
@@ -11,13 +11,13 @@ interface TaskWithId extends Task {
 }
 
 const taskTypeTranslations: Record<TaskType, string> = {
-  onboarding: "新生關懷",
-  first_lesson: "首課關懷",
-  monthly_care: "月度關懷"
+  onboarding: "🌱 新生關懷",
+  first_lesson: "📚 首課關懷",
+  monthly_care: "💝 月度關懷"
 };
 
 export default function Home() {
-  const [tasks, setTasks] = useState<TaskWithId[]>([]);
+  const [dueTasks, setDueTasks] = useState<TaskWithId[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,13 +33,20 @@ export default function Home() {
           ...doc.data()
         })) as TaskWithId[];
         
-        // Filter pending tasks in client
-        const pendingTasks = tasksData.filter(task => task.status === 'pending');
+        // Get end of today
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
         
-        // Sort by due date
-        pendingTasks.sort((a, b) => a.dueDate.seconds - b.dueDate.seconds);
+        // Filter for due tasks (pending + due <= end of today)
+        const filteredTasks = tasksData.filter(task => {
+          const dueDate = task.dueDate.toDate();
+          return task.status === 'pending' && dueDate <= endOfToday;
+        });
         
-        setTasks(pendingTasks);
+        // Sort by due date (ascending)
+        filteredTasks.sort((a, b) => a.dueDate.seconds - b.dueDate.seconds);
+        
+        setDueTasks(filteredTasks);
         setLoading(false);
       },
       (error) => {
@@ -53,7 +60,7 @@ export default function Home() {
 
   const formatDate = (timestamp: any) => {
     const date = timestamp.toDate();
-    return date.toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
   };
 
   const isOverdue = (timestamp: any) => {
@@ -72,6 +79,16 @@ export default function Home() {
     return dueDate.getTime() === today.getTime();
   };
 
+  // Group tasks by type
+  const groupedTasks = dueTasks.reduce((groups, task) => {
+    const type = task.taskType;
+    if (!groups[type]) {
+      groups[type] = [];
+    }
+    groups[type].push(task);
+    return groups;
+  }, {} as Record<TaskType, TaskWithId[]>);
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Header */}
@@ -83,39 +100,48 @@ export default function Home() {
       <div className="p-4">
         {loading ? (
           <div className="text-center py-8 text-gray-500">載入中...</div>
-        ) : tasks.length === 0 ? (
+        ) : dueTasks.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-600 text-lg">今天沒有待辦事項！休息一下吧 🎉</p>
+            <p className="text-gray-600 text-lg">太棒了！今天沒有待辦事項 🎉</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {tasks.map((task) => (
-              <div key={task.id} className="bg-white rounded-lg p-4 shadow-sm border">
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h3 className="font-medium text-gray-900">
-                      {taskTypeTranslations[task.taskType]}
-                    </h3>
-                    <p className="text-sm text-gray-500">客戶: {task.clientName}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-medium ${
-                      isOverdue(task.dueDate) ? 'text-red-600' :
-                      isToday(task.dueDate) ? 'text-green-600' :
-                      'text-gray-600'
-                    }`}>
-                      {formatDate(task.dueDate)}
-                    </p>
-                    {task.priority === 'high' && (
-                      <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                        高優先
-                      </span>
-                    )}
-                  </div>
+          <div className="space-y-6">
+            {Object.entries(groupedTasks).map(([taskType, tasks]) => (
+              <div key={taskType}>
+                {/* Section Header */}
+                <h2 className="text-lg font-semibold text-gray-800 mb-3">
+                  {taskTypeTranslations[taskType as TaskType]} ({tasks.length})
+                </h2>
+                
+                {/* Task Cards */}
+                <div className="space-y-3">
+                  {tasks.map((task) => (
+                    <div key={task.id} className="bg-white rounded-lg p-4 shadow-sm border">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h3 className="font-medium text-gray-900 text-lg">
+                            {task.clientName}
+                          </h3>
+                          <p className={`text-sm font-medium ${
+                            isOverdue(task.dueDate) ? 'text-red-600' :
+                            isToday(task.dueDate) ? 'text-green-600' :
+                            'text-gray-600'
+                          }`}>
+                            {formatDate(task.dueDate)}
+                          </p>
+                        </div>
+                        {task.priority === 'high' && (
+                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
+                            高優先
+                          </span>
+                        )}
+                      </div>
+                      <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                        📞 撥打電話
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                  📞 撥打電話
-                </button>
               </div>
             ))}
           </div>
