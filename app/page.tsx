@@ -5,6 +5,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Task, TaskType } from "@/types/schema";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface TaskWithId extends Task {
   id: string;
@@ -13,6 +14,7 @@ interface TaskWithId extends Task {
 export default function Home() {
   const [allTasks, setAllTasks] = useState<TaskWithId[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     const q = query(
@@ -79,52 +81,81 @@ export default function Home() {
     const isOverdue = taskDateString < todayString;
     const isToday = taskDateString === todayString;
 
+    const handleNavigation = () => {
+      router.push(`/customers/${task.id}`);
+    };
+
     return (
-      <div className={`bg-white shadow-sm rounded-lg border border-gray-200 p-4 mb-3 border-t-4 ${borderColor}`}>
-        <div className="flex justify-between items-start">
-          {/* Left Side - Info */}
-          <div className="flex-1">
-            {/* Header - Client Name + Parent Name */}
-            <div className="mb-2">
-              <h3 className="text-base font-bold text-gray-900">
-                {task.clientName}
-              </h3>
-              <p className="text-sm text-gray-500">
-                {task.parentName}
-              </p>
-            </div>
-            
-            {/* Body - Product Badge */}
-            <div className="mb-3">
-              <span className="inline-block bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
-                {task.product}
-              </span>
-            </div>
-            
-            {/* Footer - Date Status */}
-            <div>
-              {isOverdue ? (
-                <p className="text-red-600 text-sm font-medium">
-                  逾期 {formatDateDisplay(task.dueDate)}
-                </p>
-              ) : isToday ? (
-                <p className="text-green-600 text-sm font-medium">
-                  今日任務
-                </p>
-              ) : (
-                <p className="text-gray-500 text-sm">
-                  {formatDateDisplay(task.dueDate)}
-                </p>
-              )}
-            </div>
-          </div>
-          
-          {/* Right Side - Action */}
-          <div className="ml-4">
-            <button className="w-8 h-8 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center hover:bg-blue-100 transition-colors">
+      <div className={`bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-3 border-l-4 ${borderColor}`}>
+        {/* Row 1 - Header: Student Name + Contact Icons */}
+        <div className="flex items-center mb-2">
+          <h3 
+            className="text-base font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+            onClick={handleNavigation}
+          >
+            {task.clientName}
+          </h3>
+          <div className="flex gap-2 ml-3">
+            {/* Phone Icon */}
+            <button 
+              onClick={handleNavigation}
+              className="w-6 h-6 text-gray-400 hover:text-blue-600 transition-colors"
+              title={task.parentName ? `電話: ${task.parentName}` : '電話'}
+            >
               📞
             </button>
+            {/* Email Icon */}
+            {task.email && (
+              <button 
+                onClick={handleNavigation}
+                className="w-6 h-6 text-gray-400 hover:text-blue-600 transition-colors"
+                title={`Email: ${task.email}`}
+              >
+                ✉️
+              </button>
+            )}
+            {/* Line Icon */}
+            {task.lineId && (
+              <button 
+                onClick={handleNavigation}
+                className="w-6 h-6 text-gray-400 hover:text-green-600 transition-colors"
+                title={`Line: ${task.lineId}`}
+              >
+                💬
+              </button>
+            )}
           </div>
+        </div>
+        
+        {/* Row 2 - Parent Name */}
+        <div className="mb-2">
+          <p className="text-sm text-gray-500">
+            (家長: {task.parentName})
+          </p>
+        </div>
+        
+        {/* Row 3 - Product Badge */}
+        <div className="mb-3">
+          <span className="inline-block bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium">
+            {task.product}
+          </span>
+        </div>
+        
+        {/* Row 4 - Footer: Date Status (Right Aligned) */}
+        <div className="flex justify-end">
+          {isOverdue ? (
+            <p className="text-red-600 text-sm font-medium">
+              逾期 {formatDateDisplay(task.dueDate)}
+            </p>
+          ) : isToday ? (
+            <p className="text-green-600 text-sm font-medium">
+              今日任務
+            </p>
+          ) : (
+            <p className="text-gray-500 text-sm">
+              {formatDateDisplay(task.dueDate)}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -162,11 +193,13 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50 pb-20">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200 p-4">
-        <h1 className="text-xl font-bold text-gray-900">今日待辦事項</h1>
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-xl font-bold text-gray-900">今日待辦事項</h1>
+        </div>
       </div>
 
       {/* Main Content */}
-      <div className="p-4">
+      <div className="max-w-4xl mx-auto p-4">
         {loading ? (
           <div className="text-center py-12">
             <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-8">
