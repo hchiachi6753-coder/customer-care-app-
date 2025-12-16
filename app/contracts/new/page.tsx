@@ -16,7 +16,8 @@ interface FormData {
   paymentMethod: string;
   source?: string;
   startDate: string;
-  firstLessonDate?: string;
+  noviceDate: string;
+  firstLessonDate: string;
   note?: string;
 }
 
@@ -28,7 +29,13 @@ export default function NewContractPage() {
       type: "new",
       product: "勤學包",
       paymentMethod: "一次付清",
-      startDate: new Date().toISOString().split('T')[0]
+      startDate: new Date().toISOString().split('T')[0],
+      noviceDate: new Date().toISOString().split('T')[0],
+      firstLessonDate: (() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 7);
+        return date.toISOString().split('T')[0];
+      })()
     }
   });
 
@@ -49,7 +56,8 @@ export default function NewContractPage() {
         source: data.source || null,
         productCycle: 24,
         startDate: Timestamp.fromDate(new Date(data.startDate)),
-        firstLessonDate: data.firstLessonDate ? Timestamp.fromDate(new Date(data.firstLessonDate)) : null,
+        noviceDate: Timestamp.fromDate(new Date(data.noviceDate)),
+        firstLessonDate: Timestamp.fromDate(new Date(data.firstLessonDate)),
         note: data.note || null,
         status: "active"
       };
@@ -197,13 +205,30 @@ export default function NewContractPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              首課日期 (選填)
+              新手關懷日期 *
             </label>
             <input
               type="date"
-              {...register("firstLessonDate")}
+              {...register("noviceDate", { required: "請選擇新手關懷日期" })}
               className="h-12 w-full px-4 bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
             />
+            {errors.noviceDate && (
+              <p className="text-red-500 text-sm mt-1">{errors.noviceDate.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              首課關懷日期 *
+            </label>
+            <input
+              type="date"
+              {...register("firstLessonDate", { required: "請選擇首課關懷日期" })}
+              className="h-12 w-full px-4 bg-white text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
+            />
+            {errors.firstLessonDate && (
+              <p className="text-red-500 text-sm mt-1">{errors.firstLessonDate.message}</p>
+            )}
           </div>
 
           <div>

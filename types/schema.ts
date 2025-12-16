@@ -26,7 +26,8 @@ export interface Contract {
   source?: string;
   productCycle: number; // default 24
   startDate: Timestamp; // T=0
-  firstLessonDate?: Timestamp | null;
+  noviceDate: Timestamp;
+  firstLessonDate: Timestamp;
   note?: string;
   status: 'active' | 'risk' | 'finished';
 }
