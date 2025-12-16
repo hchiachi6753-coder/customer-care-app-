@@ -37,6 +37,8 @@ export interface Task {
   contractId: string;
   agentId: string;
   clientName: string;
+  parentName: string;
+  product: string;
   dueDate: Timestamp;
   taskType: TaskType;
   isCompleted: boolean;
