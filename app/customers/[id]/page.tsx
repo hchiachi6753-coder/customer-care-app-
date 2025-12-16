@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Task } from "@/types/schema";
 import { useRouter } from "next/navigation";
@@ -10,34 +10,114 @@ interface TaskWithId extends Task {
   id: string;
 }
 
+interface TimelineEvent {
+  id: string;
+  date: Date;
+  type: 'newcomer' | 'first_class' | 'monthly_care';
+  title: string;
+  status: 'completed' | 'pending' | 'overdue';
+  icon: string;
+  color: string;
+}
+
 export default function CustomerDetailPage({ params }: { params: { id: string } }) {
   const [task, setTask] = useState<TaskWithId | null>(null);
+  const [allTasks, setAllTasks] = useState<TaskWithId[]>([]);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const fetchTask = async () => {
+    const fetchData = async () => {
       try {
+        // Fetch the specific task
         const taskDoc = await getDoc(doc(db, "tasks", params.id));
         if (taskDoc.exists()) {
-          setTask({ id: taskDoc.id, ...taskDoc.data() } as TaskWithId);
+          const currentTask = { id: taskDoc.id, ...taskDoc.data() } as TaskWithId;
+          setTask(currentTask);
+          
+          // Fetch all tasks for this contract to build timeline
+          const tasksQuery = query(
+            collection(db, "tasks"),
+            where("contractId", "==", currentTask.contractId)
+          );
+          const tasksSnapshot = await getDocs(tasksQuery);
+          const contractTasks = tasksSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as TaskWithId[];
+          
+          setAllTasks(contractTasks);
+          buildTimeline(contractTasks);
         }
         setLoading(false);
       } catch (error) {
-        console.error("Error fetching task:", error);
+        console.error("Error fetching data:", error);
         setLoading(false);
       }
     };
 
-    fetchTask();
+    fetchData();
   }, [params.id]);
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "未設定";
-    return new Date(dateString).toLocaleDateString('zh-TW', { 
+  const buildTimeline = (tasks: TaskWithId[]) => {
+    const events: TimelineEvent[] = [];
+    const today = new Date();
+    
+    tasks.forEach(task => {
+      const dueDate = task.dueDate.toDate();
+      let eventType: TimelineEvent['type'] = 'monthly_care';
+      let title = '月度關懷';
+      let icon = '📅';
+      let color = 'blue';
+      
+      if (task.taskType === 'onboarding') {
+        eventType = 'newcomer';
+        title = '新手關懷';
+        icon = '🌱';
+        color = 'green';
+      } else if (task.taskType === 'first_lesson') {
+        eventType = 'first_class';
+        title = '首課關懷';
+        icon = '🏫';
+        color = 'blue';
+      }
+      
+      let status: TimelineEvent['status'] = 'pending';
+      if (task.isCompleted) {
+        status = 'completed';
+      } else if (dueDate < today) {
+        status = 'overdue';
+      }
+      
+      events.push({
+        id: task.id,
+        date: dueDate,
+        type: eventType,
+        title,
+        status,
+        icon,
+        color
+      });
+    });
+    
+    // Sort by date (earliest first)
+    events.sort((a, b) => a.date.getTime() - b.date.getTime());
+    setTimeline(events);
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('zh-TW', { 
       year: 'numeric', 
       month: 'long', 
       day: 'numeric' 
+    });
+  };
+  
+  const formatShortDate = (date: Date) => {
+    return date.toLocaleDateString('zh-TW', { 
+      month: '2-digit', 
+      day: '2-digit' 
     });
   };
 
@@ -125,30 +205,34 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
         {/* Section A: Contact Info */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">聯絡資訊</h2>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">電話</span>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <span className="text-gray-600 font-medium">家長姓名</span>
+              <span className="text-gray-900">{task.parentName}</span>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <span className="text-gray-600 font-medium">電話</span>
               <a 
                 href={`tel:${task.parentName}`} 
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
-                📞 {task.parentName}
+                📞 點擊撥號
               </a>
             </div>
             {task.email && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Email</span>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-600 font-medium">Email</span>
                 <a 
                   href={`mailto:${task.email}`} 
                   className="text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  ✉️ {task.email}
+                  ✉️ 發送郵件
                 </a>
               </div>
             )}
             {task.lineId && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Line ID</span>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-600 font-medium">Line ID</span>
                 <span className="text-green-600 font-medium">
                   💬 {task.lineId}
                 </span>
@@ -157,87 +241,61 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
           </div>
         </div>
 
-        {/* Section B: Milestones */}
+        {/* Section B: Care History Timeline */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">重要里程碑</h2>
-          <div className="space-y-4">
-            <div className="flex items-center p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
-              <div className="flex-1">
-                <h3 className="font-medium text-green-900">新手加入日</h3>
-                <p className="text-green-700 text-sm">{formatDate(task.joinDate)}</p>
-              </div>
-              <div className="text-green-600 text-xl">🌱</div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-6">關懷歷程</h2>
+          <div className="relative">
+            {/* Vertical Line */}
+            <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+            
+            {/* Timeline Events */}
+            <div className="space-y-6">
+              {timeline.map((event, index) => {
+                const statusColors = {
+                  completed: 'bg-green-500 border-green-200',
+                  pending: 'bg-blue-500 border-blue-200',
+                  overdue: 'bg-red-500 border-red-200'
+                };
+                const statusTexts = {
+                  completed: '已完成',
+                  pending: '待處理',
+                  overdue: '逾期'
+                };
+                const statusTextColors = {
+                  completed: 'text-green-600',
+                  pending: 'text-blue-600',
+                  overdue: 'text-red-600'
+                };
+                
+                return (
+                  <div key={event.id} className="relative flex items-start">
+                    {/* Date Badge */}
+                    <div className="flex-shrink-0 w-12 text-right mr-4">
+                      <div className="text-xs text-gray-500 font-medium">
+                        {formatShortDate(event.date)}
+                      </div>
+                    </div>
+                    
+                    {/* Timeline Dot */}
+                    <div className={`relative flex-shrink-0 w-3 h-3 rounded-full border-2 ${statusColors[event.status]} z-10`}></div>
+                    
+                    {/* Event Content */}
+                    <div className="flex-1 ml-4 pb-6">
+                      <div className="flex items-center mb-1">
+                        <span className="text-lg mr-2">{event.icon}</span>
+                        <h3 className="font-medium text-gray-900">{event.title}</h3>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-1">
+                        預計執行: {formatDate(event.date)}
+                      </p>
+                      <p className={`text-xs font-medium ${statusTextColors[event.status]}`}>
+                        狀態: {statusTexts[event.status]}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="flex items-center p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-              <div className="flex-1">
-                <h3 className="font-medium text-blue-900">首課日期</h3>
-                <p className="text-blue-700 text-sm">{formatDate(task.firstClassDate)}</p>
-              </div>
-              <div className="text-blue-600 text-xl">🏫</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Section C: Interaction Timeline */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">互動時間軸</h2>
-          <div className="space-y-4">
-            {/* Timeline Item 1 */}
-            <div className="flex items-start">
-              <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-medium text-gray-900">新手關懷任務</h3>
-                <p className="text-gray-600 text-sm">預計執行日期: {formatDate(task.joinDate)}</p>
-                <p className="text-gray-500 text-xs mt-1">狀態: 待處理</p>
-              </div>
-            </div>
-
-            {/* Timeline Item 2 */}
-            <div className="flex items-start">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-medium text-gray-900">首課關懷任務</h3>
-                <p className="text-gray-600 text-sm">預計執行日期: {formatDate(task.firstClassDate)}</p>
-                <p className="text-gray-500 text-xs mt-1">狀態: 待處理</p>
-              </div>
-            </div>
-
-            {/* Timeline Item 3 */}
-            <div className="flex items-start">
-              <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3">
-                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-medium text-gray-900">月度關懷任務</h3>
-                <p className="text-gray-600 text-sm">定期關懷追蹤</p>
-                <p className="text-gray-500 text-xs mt-1">狀態: 進行中</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">快速動作</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <a
-              href={`tel:${task.parentName}`}
-              className="flex items-center justify-center p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              📞 撥打電話
-            </a>
-            {task.email && (
-              <a
-                href={`mailto:${task.email}`}
-                className="flex items-center justify-center p-3 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
-              >
-                ✉️ 發送郵件
-              </a>
-            )}
           </div>
         </div>
       </div>
