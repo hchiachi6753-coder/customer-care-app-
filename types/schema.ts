@@ -3,7 +3,7 @@ import { Timestamp } from 'firebase/firestore';
 export type Role = 'agent' | 'manager' | 'director';
 export type ContractType = 'new' | 'renew';
 export type TaskType = 'onboarding' | 'first_lesson' | 'monthly_care';
-export type TaskStatus = 'pending' | 'done' | 'deferred';
+export type TaskStatus = 'pending' | 'done' | 'deferred' | 'todo';
 
 export interface User {
   uid: string;
@@ -34,6 +34,7 @@ export interface Contract {
   firstClassDate?: string; // YYYY-MM-DD
   note?: string;
   status: 'active' | 'risk' | 'finished';
+  createdAt?: Timestamp; // Contract creation timestamp
 }
 
 export interface Task {
@@ -57,6 +58,7 @@ export interface Task {
   callOutcome?: 'connected' | 'no_answer' | 'busy' | 'none';
   serviceType?: 'normal' | 'help_needed' | 'complaint' | 'none';
   isSystemGenerated?: boolean;
+  createdAt?: Timestamp; // Task creation timestamp
 }
 
 export interface TaskLog {

@@ -183,7 +183,7 @@ export default function Home() {
       const allContractTasks = contractTasksSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })) as TaskWithId[];
       
       // Client-side filtering and sorting
       const futureTasks = allContractTasks
