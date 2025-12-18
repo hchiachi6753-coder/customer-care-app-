@@ -46,13 +46,21 @@
      - **Logic (Strict):**
        - **Filter:** Show ONLY tasks where `dueDate <= Today` (Includes Overdue).
        - **Hide:** strictly HIDE all future tasks.
-       - **Grouping:** Group tasks by `taskType`.
-     - **UI:** Card layout displaying Student Name, Parent Name, Product, and Status.
+       - **Grouping:** 4-Column Kanban Board by task type and source.
+     - **UI:** 4-Column layout: Newcomer, First Lesson, Monthly Care (System), General Care (Manual).
+     - **Task Classification:**
+       - Newcomer Care: `taskType === 'onboarding'`
+       - First Lesson Care: `taskType === 'first_lesson'`
+       - Monthly Care: `taskType === 'monthly_care'` AND `isSystemGenerated !== false`
+       - General Care: `taskType === 'monthly_care'` AND `isSystemGenerated === false`
   2. **Add Contract (`/contracts/new`):**
      - Purpose: New client entry form.
      - Inputs: Start Date, Novice Date, First Lesson Date.
   3. **My Clients (`/contracts`):**
-     - Purpose: Searchable list of all clients.
+     - Purpose: Timeline-grouped client list.
+     - **Grouping:** By contract start date (YYYY年 MM月).
+     - **Sorting:** Primary by contract date (desc), Secondary by createdAt (desc).
+     - **Layout:** Single-line compact rows with responsive text truncation.
 
 ## 6. UI Design System (Salesforce Lightning Style)
 - **Layout Pattern:** F-Pattern layout for dashboard
@@ -77,8 +85,21 @@
 - **Implementation:** Store `clientName`, `parentName`, `product` directly in Task documents
 - **Trade-off:** Slight data redundancy for significant performance gain
 - **Maintenance:** Update denormalized data when contract changes
+- **Task Source Identification:** Use `isSystemGenerated` flag to distinguish system vs manual tasks
 
-## 9. Build & Deployment Configuration (Crucial)
+## 9. Task Classification & Sorting Logic
+- **System vs Manual Tasks:**
+  - System Tasks: `isSystemGenerated !== false` (auto-generated monthly milestones)
+  - Manual Tasks: `isSystemGenerated === false` (agent-created follow-ups)
+- **Client List Sorting:**
+  - Primary: `contractStartDate` (descending - newest first)
+  - Secondary: `createdAt` (descending - latest created first)
+- **Care History Sorting:**
+  - Primary: `dueDate` (ascending - earliest first)
+  - Secondary: `createdAt` (ascending - system tasks before manual tasks)
+- **Timeline Grouping:** Group clients by contract start month for better organization
+
+## 10. Build & Deployment Configuration (Crucial)
 - **Next.js Config:** Enable empty `turbopack: {}` and exclude `/functions` directory
 - **Environment Variables:** Required Firebase keys in Vercel
 - **Deployment Status:** ✅ Successfully deployed to Vercel (frontend) and Firebase (Cloud Functions)

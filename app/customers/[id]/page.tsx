@@ -13,11 +13,15 @@ interface TaskWithId extends Task {
 interface TimelineEvent {
   id: string;
   date: Date;
-  type: 'newcomer' | 'first_class' | 'monthly_care';
+  type: 'newcomer' | 'first_class' | 'monthly_care' | 'general_care';
   title: string;
   status: 'completed' | 'pending' | 'overdue';
   icon: string;
   color: string;
+  isCompleted?: boolean;
+  callOutcome?: string;
+  serviceType?: string;
+  completionNote?: string;
 }
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -69,8 +73,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       const dueDate = task.dueDate.toDate();
       let eventType: TimelineEvent['type'] = 'monthly_care';
       let title = '月度關懷';
-      let icon = '📅';
-      let color = 'blue';
+      let icon = '🗓️';
+      let color = 'purple';
       
       if (task.taskType === 'onboarding') {
         eventType = 'newcomer';
@@ -82,6 +86,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         title = '首課關懷';
         icon = '🏫';
         color = 'blue';
+      } else if (task.taskType === 'monthly_care' && task.isSystemGenerated === false) {
+        eventType = 'general_care';
+        title = '一般關懷 (手動)';
+        icon = '📞';
+        color = 'orange';
       }
       
       let status: TimelineEvent['status'] = 'pending';
@@ -98,12 +107,26 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         title,
         status,
         icon,
-        color
+        color,
+        isCompleted: task.isCompleted,
+        callOutcome: task.callOutcome,
+        serviceType: task.serviceType,
+        completionNote: task.completionNote
       });
     });
     
-    // Sort by date (earliest first)
-    events.sort((a, b) => a.date.getTime() - b.date.getTime());
+    // Sort by date: Primary by dueDate, Secondary by createdAt (both ascending - earliest first)
+    events.sort((a, b) => {
+      const dateCompare = a.date.getTime() - b.date.getTime();
+      if (dateCompare !== 0) return dateCompare;
+      
+      // Tie-breaker: createdAt (older first - system tasks before manual tasks)
+      const aTask = tasks.find(t => t.id === a.id);
+      const bTask = tasks.find(t => t.id === b.id);
+      const aCreated = aTask?.createdAt?.seconds || 0;
+      const bCreated = bTask?.createdAt?.seconds || 0;
+      return aCreated - bCreated;
+    });
     setTimeline(events);
   };
 
@@ -120,6 +143,24 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       month: '2-digit', 
       day: '2-digit' 
     });
+  };
+
+  const getCallOutcomeDisplay = (outcome?: string) => {
+    const map = {
+      connected: { label: '成功聯繫', color: 'bg-green-100 text-green-700' },
+      no_answer: { label: '未接聽', color: 'bg-yellow-100 text-yellow-700' },
+      busy: { label: '忙線中', color: 'bg-red-100 text-red-700' }
+    };
+    return outcome ? map[outcome as keyof typeof map] : null;
+  };
+
+  const getServiceTypeDisplay = (type?: string) => {
+    const map = {
+      normal: { label: '正常', color: 'bg-gray-100 text-gray-700' },
+      help_needed: { label: '需要協助', color: 'bg-orange-100 text-orange-700' },
+      complaint: { label: '客訴', color: 'bg-red-100 text-red-800' }
+    };
+    return type ? map[type as keyof typeof map] : null;
   };
 
   const getStatusColor = (status: string) => {
@@ -278,7 +319,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                     
                     {/* Timeline Dot */}
-                    <div className={`relative flex-shrink-0 w-3 h-3 rounded-full border-2 ${statusColors[event.status]} z-10`}></div>
+                    <div className={`relative flex-shrink-0 w-3 h-3 rounded-full border-2 ${
+                      event.isCompleted ? 'bg-green-500 border-green-200' : statusColors[event.status]
+                    } z-10`}></div>
                     
                     {/* Event Content */}
                     <div className="flex-1 ml-4 pb-6">
@@ -286,8 +329,36 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                         <span className="text-lg mr-2">{event.icon}</span>
                         <h3 className="font-medium text-gray-900">{event.title}</h3>
                       </div>
+                      
+                      {/* Completion Badges */}
+                      {event.isCompleted && (event.callOutcome || event.serviceType) && (
+                        <div className="flex gap-2 mb-2">
+                          {event.callOutcome && getCallOutcomeDisplay(event.callOutcome) && (
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              getCallOutcomeDisplay(event.callOutcome)!.color
+                            }`}>
+                              {getCallOutcomeDisplay(event.callOutcome)!.label}
+                            </span>
+                          )}
+                          {event.serviceType && getServiceTypeDisplay(event.serviceType) && (
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              getServiceTypeDisplay(event.serviceType)!.color
+                            }`}>
+                              {getServiceTypeDisplay(event.serviceType)!.label}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Completion Note */}
+                      {event.completionNote && (
+                        <div className="mt-2 p-2 bg-slate-50 text-slate-600 text-sm rounded border border-slate-100">
+                          {event.completionNote}
+                        </div>
+                      )}
+                      
                       <p className="text-sm text-gray-600 mb-1">
-                        預計執行: {formatDate(event.date)}
+                        {event.isCompleted ? '完成時間' : '預計執行'}: {formatDate(event.date)}
                       </p>
                       <p className={`text-xs font-medium ${statusTextColors[event.status]}`}>
                         狀態: {statusTexts[event.status]}

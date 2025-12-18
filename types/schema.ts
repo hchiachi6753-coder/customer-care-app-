@@ -52,6 +52,11 @@ export interface Task {
   isCompleted: boolean;
   status: TaskStatus;
   priority: 'normal' | 'high';
+  completedAt?: string;
+  completionNote?: string;
+  callOutcome?: 'connected' | 'no_answer' | 'busy' | 'none';
+  serviceType?: 'normal' | 'help_needed' | 'complaint' | 'none';
+  isSystemGenerated?: boolean;
 }
 
 export interface TaskLog {
@@ -62,3 +67,18 @@ export interface TaskLog {
   note: string;
   createdAt: Timestamp;
 }
+
+// Task Completion Options
+export const CALL_OUTCOME_OPTIONS = [
+  { value: 'connected', label: '成功聯繫' },
+  { value: 'no_answer', label: '未接聽' },
+  { value: 'busy', label: '忙線中' },
+  { value: 'none', label: '未撥打' }
+] as const;
+
+export const SERVICE_TYPE_OPTIONS = [
+  { value: 'normal', label: '正常' },
+  { value: 'help_needed', label: '需要協助' },
+  { value: 'complaint', label: '客訴' },
+  { value: 'none', label: '無' }
+] as const;

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, Timestamp, orderBy, limit, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Task, TaskType } from "@/types/schema";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import TaskCompletionModal from "@/components/TaskCompletionModal";
 
 interface TaskWithId extends Task {
   id: string;
@@ -14,6 +15,9 @@ interface TaskWithId extends Task {
 export default function Home() {
   const [allTasks, setAllTasks] = useState<TaskWithId[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTask, setSelectedTask] = useState<TaskWithId | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [schedulePreview, setSchedulePreview] = useState<{ manualTasks: any[], systemTask: any | null } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -63,16 +67,167 @@ export default function Home() {
   const todayString = getTodayString();
   const dueTasks = allTasks.filter(task => {
     const taskDateString = getDateString(task.dueDate);
-    return task.status === 'pending' && taskDateString <= todayString;
+    return (task.status === 'pending' || task.status === 'todo') && taskDateString <= todayString;
   });
 
   // Sort by due date (ascending)
   dueTasks.sort((a, b) => a.dueDate.seconds - b.dueDate.seconds);
 
-  // Filter tasks by specific types for 3 sections
+  // Filter tasks by specific types for 4 sections
   const noviceTasks = dueTasks.filter(task => task.taskType === 'onboarding');
   const firstLessonTasks = dueTasks.filter(task => task.taskType === 'first_lesson');
-  const generalTasks = dueTasks.filter(task => task.taskType === 'monthly_care');
+  const monthlyTasks = dueTasks.filter(task => task.taskType === 'monthly_care' && task.isSystemGenerated !== false);
+  const generalTasks = dueTasks.filter(task => task.taskType === 'monthly_care' && task.isSystemGenerated === false);
+  
+  console.log('\n=== 📊 任務分析 ===');
+  console.log('- 所有任務:', allTasks.length);
+  console.log('- 待辦任務:', dueTasks.length);
+  console.log('- 新手關懷:', noviceTasks.length);
+  console.log('- 首課關懷:', firstLessonTasks.length);
+  console.log('- 月度關懷:', monthlyTasks.length);
+  console.log('- 一般關懷:', generalTasks.length);
+  
+  // 檢查最近的任務
+  const recentTasks = allTasks
+    .filter(t => t.taskType === 'monthly_care')
+    .sort((a, b) => b.dueDate.seconds - a.dueDate.seconds)
+    .slice(0, 3);
+    
+  console.log('\n=== 🔍 最近的一般關懷任務 ===');
+  recentTasks.forEach((task, index) => {
+    const taskDate = new Date(task.dueDate.seconds * 1000).toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    console.log(`${index + 1}. ID: ${task.id}`);
+    console.log(`   客戶: ${task.clientName}`);
+    console.log(`   日期: ${taskDate} (今天: ${today})`);
+    console.log(`   狀態: ${task.status}`);
+    console.log(`   完成: ${task.isCompleted}`);
+    console.log(`   應顯示: ${task.status === 'pending' && taskDate <= today}`);
+    console.log('---');
+  });
+
+  const handleConfirmCompletion = async (taskData: {
+    note: string;
+    callOutcome: string;
+    serviceType: string;
+    nextContactDate?: string;
+    isReschedule?: boolean;
+  }) => {
+    if (!selectedTask) return;
+    
+    const normalizeDate = (d: string) => d ? d.replace(/-/g, '/') : '';
+    
+    try {
+      if (taskData.callOutcome === 'connected') {
+        // Scenario A: Success - Mark Done
+        await updateDoc(doc(db, "tasks", selectedTask.id), {
+          isCompleted: true,
+          status: 'done',
+          completionNote: taskData.note,
+          callOutcome: taskData.callOutcome,
+          serviceType: taskData.serviceType,
+          completedAt: new Date().toISOString()
+        });
+        
+        // Create NEW task if date provided
+        if (taskData.nextContactDate && taskData.nextContactDate.trim()) {
+          await addDoc(collection(db, "tasks"), {
+            dueDate: Timestamp.fromDate(new Date(normalizeDate(taskData.nextContactDate))),
+            contractId: selectedTask.contractId,
+            agentId: "temp-agent-id",
+            clientName: selectedTask.clientName,
+            parentName: selectedTask.parentName,
+            product: selectedTask.product,
+            email: selectedTask.email,
+            lineId: selectedTask.lineId,
+            taskType: 'monthly_care',
+            isCompleted: false,
+            status: 'pending',
+            priority: 'normal',
+            isSystemGenerated: false
+          });
+        }
+      } else {
+        // Scenario B: Failure - Reschedule current task
+        await updateDoc(doc(db, "tasks", selectedTask.id), {
+          isCompleted: false,
+          status: 'todo',
+          dueDate: Timestamp.fromDate(new Date(normalizeDate(taskData.nextContactDate!))),
+          completionNote: taskData.note,
+          callOutcome: taskData.callOutcome,
+          serviceType: taskData.serviceType
+        });
+      }
+      
+      setIsModalOpen(false);
+      setSelectedTask(null);
+      setSchedulePreview(null);
+    } catch (error) {
+      console.error('Error handling task:', error);
+      alert('操作失敗，請重試');
+    }
+  };
+
+  const openCompleteModal = async (task: TaskWithId) => {
+    setSelectedTask(task);
+    setSchedulePreview(null);
+    
+    try {
+      // Simplified query - fetch all tasks for this contract and filter client-side
+      const contractTasksQuery = query(
+        collection(db, "tasks"),
+        where("contractId", "==", task.contractId)
+      );
+      
+      const contractTasksSnapshot = await getDocs(contractTasksQuery);
+      const allContractTasks = contractTasksSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Client-side filtering and sorting
+      const futureTasks = allContractTasks
+        .filter(t => 
+          t.status === 'pending' && 
+          t.dueDate.seconds > task.dueDate.seconds
+        )
+        .sort((a, b) => a.dueDate.seconds - b.dueDate.seconds)
+        .slice(0, 10);
+      
+      // Find first system task using improved detection
+      let systemTask = null;
+      let manualTasks = [];
+      
+      for (let i = 0; i < futureTasks.length; i++) {
+        const task = futureTasks[i];
+        
+        // Check if this is a system task
+        const isSystemTask = 
+          task.isSystemGenerated === true ||
+          (task.taskType && (
+            task.taskType.includes('monthly') ||
+            task.taskType.includes('first_lesson') ||
+            task.taskType.includes('onboarding')
+          ));
+        
+        if (isSystemTask) {
+          // Found first system task - stop here
+          systemTask = task;
+          break;
+        } else {
+          // This is a manual task
+          manualTasks.push(task);
+        }
+      }
+      
+      setSchedulePreview({ manualTasks, systemTask });
+    } catch (error) {
+      console.error('Error fetching future tasks:', error);
+      setSchedulePreview({ manualTasks: [], systemTask: null });
+    }
+    
+    setIsModalOpen(true);
+  };
 
   // Task Card Component
   const TaskCard = ({ task, borderColor }: { task: TaskWithId; borderColor: string }) => {
@@ -87,7 +242,7 @@ export default function Home() {
 
     return (
       <div className={`bg-white p-2.5 rounded-xl shadow-sm border border-gray-200 mb-2 border-l-4 ${borderColor}`}>
-        {/* Row 1 - Header: Student Name + Contact Icons */}
+        {/* Row 1 - Header: Student Name + Icons */}
         <div className="flex items-center justify-between mb-1">
           <h3 
             className="text-sm font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
@@ -96,6 +251,14 @@ export default function Home() {
             {task.clientName}
           </h3>
           <div className="flex gap-1.5">
+            {/* Complete Task Button */}
+            <button 
+              onClick={() => openCompleteModal(task)}
+              className="w-6 h-6 bg-green-100 text-green-600 rounded border border-green-300 hover:bg-green-200 transition-colors flex items-center justify-center"
+              title="完成任務"
+            >
+              ✓
+            </button>
             {/* Phone Icon */}
             <button 
               onClick={handleNavigation}
@@ -226,12 +389,20 @@ export default function Home() {
               icon="🏫"
             />
             
-            {/* Section 3: General Care */}
+            {/* Section 3: Monthly Care */}
+            <Section 
+              title="月度關懷" 
+              tasks={monthlyTasks} 
+              borderColor="border-t-purple-500"
+              icon="🗓️"
+            />
+            
+            {/* Section 4: General Care */}
             <Section 
               title="一般關懷" 
               tasks={generalTasks} 
-              borderColor="border-t-blue-500"
-              icon="📅"
+              borderColor="border-t-orange-500"
+              icon="📋"
             />
           </div>
         )}
@@ -254,6 +425,19 @@ export default function Home() {
           </Link>
         </div>
       </div>
+
+      {/* Task Completion Modal */}
+      <TaskCompletionModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedTask(null);
+          setSchedulePreview(null);
+        }}
+        onConfirm={handleConfirmCompletion}
+        taskTitle={selectedTask ? `${selectedTask.clientName} - ${selectedTask.taskType === 'onboarding' ? '新手關懷' : selectedTask.taskType === 'first_lesson' ? '首課關懷' : '月度關懷'}` : ''}
+        schedulePreview={schedulePreview}
+      />
     </div>
   );
 }

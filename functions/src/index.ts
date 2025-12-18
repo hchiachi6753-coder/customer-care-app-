@@ -47,7 +47,8 @@ export const onContractCreated = onDocumentCreated(
       taskType: 'onboarding' as TaskType,
       isCompleted: false,
       status: 'pending',
-      priority: 'normal'
+      priority: 'normal',
+      isSystemGenerated: true
     };
     const noviceRef = db.collection('tasks').doc();
     batch.set(noviceRef, noviceTask);
@@ -65,15 +66,18 @@ export const onContractCreated = onDocumentCreated(
       taskType: 'first_lesson' as TaskType,
       isCompleted: false,
       status: 'pending',
-      priority: 'normal'
+      priority: 'normal',
+      isSystemGenerated: true
     };
     const firstLessonRef = db.collection('tasks').doc();
     batch.set(firstLessonRef, firstLessonTask);
 
     // Monthly Tasks: 24 tasks (T+1 to T+24 months)
     for (let i = 1; i <= 24; i++) {
-      const dueDate = new Date(startDate.toDate());
-      dueDate.setMonth(dueDate.getMonth() + i);
+      const baseDate = startDate.toDate();
+      const dueDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, baseDate.getDate());
+      
+      logger.info(`Creating monthly task ${i}: ${dueDate.toISOString()}`);
       
       const monthlyTask: Omit<Task, 'id'> = {
         contractId,
@@ -87,7 +91,8 @@ export const onContractCreated = onDocumentCreated(
         taskType: 'monthly_care' as TaskType,
         isCompleted: false,
         status: 'pending',
-        priority: 'normal'
+        priority: 'normal',
+        isSystemGenerated: true
       };
       
       const monthlyRef = db.collection('tasks').doc();

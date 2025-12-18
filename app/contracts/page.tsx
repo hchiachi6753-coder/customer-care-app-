@@ -31,8 +31,16 @@ export default function ContractsPage() {
           ...doc.data()
         })) as ContractWithId[];
         
-        // Client-side sorting by startDate (descending)
-        contractsData.sort((a, b) => b.startDate.seconds - a.startDate.seconds);
+        // Client-side sorting: Primary by startDate, Secondary by createdAt (both descending)
+        contractsData.sort((a, b) => {
+          const dateCompare = b.startDate.seconds - a.startDate.seconds;
+          if (dateCompare !== 0) return dateCompare;
+          
+          // Tie-breaker: createdAt (newer first)
+          const aCreated = a.createdAt?.seconds || 0;
+          const bCreated = b.createdAt?.seconds || 0;
+          return bCreated - aCreated;
+        });
         
         setContracts(contractsData);
         setFilteredContracts(contractsData);
@@ -58,6 +66,55 @@ export default function ContractsPage() {
       setFilteredContracts(filtered);
     }
   }, [searchTerm, contracts]);
+
+  // Group contracts by start date (YYYY年 MM月)
+  const groupedContracts = () => {
+    const groups: { [key: string]: ContractWithId[] } = {};
+    
+    filteredContracts.forEach(contract => {
+      let groupKey = '未設定日期';
+      
+      if (contract.startDate) {
+        const date = contract.startDate.toDate();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        groupKey = `${year}年 ${month}月`;
+      }
+      
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
+      }
+      groups[groupKey].push(contract);
+    });
+    
+    // Sort groups by date (newest first)
+    const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
+      if (a === '未設定日期') return 1;
+      if (b === '未設定日期') return -1;
+      return b.localeCompare(a);
+    });
+    
+    // Sort contracts within each group: Primary by startDate, Secondary by createdAt (both newest first)
+    sortedGroupKeys.forEach(key => {
+      groups[key].sort((a, b) => {
+        if (!a.startDate) return 1;
+        if (!b.startDate) return -1;
+        
+        const dateCompare = b.startDate.seconds - a.startDate.seconds;
+        if (dateCompare !== 0) return dateCompare;
+        
+        // Tie-breaker: createdAt (newer first)
+        const aCreated = a.createdAt?.seconds || 0;
+        const bCreated = b.createdAt?.seconds || 0;
+        return bCreated - aCreated;
+      });
+    });
+    
+    return sortedGroupKeys.map(key => ({
+      groupName: key,
+      contracts: groups[key]
+    }));
+  };
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -114,28 +171,52 @@ export default function ContractsPage() {
             <p className="text-gray-600 text-lg">查無資料</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredContracts.map((contract) => (
-              <div 
-                key={contract.id} 
-                className="bg-white rounded-lg p-4 shadow-sm border cursor-pointer hover:bg-gray-50 transition-colors"
-                onClick={() => handleCustomerClick(contract.id)}
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 mb-1">
-                      {contract.studentName} ({contract.parentName})
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {contract.product} | {getStatusText(contract.status)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={(e) => handleCall(contract.phone, e)}
-                    className="ml-4 w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors"
-                  >
-                    📞
-                  </button>
+          <div className="space-y-6">
+            {groupedContracts().map((group) => (
+              <div key={group.groupName}>
+                {/* Group Header */}
+                <div className="sticky top-20 bg-slate-200 p-3 rounded-lg mb-3 z-5 border-b border-gray-300">
+                  <h2 className="font-bold text-gray-800 text-lg">
+                    {group.groupName} ({group.contracts.length})
+                  </h2>
+                </div>
+                
+                {/* Contracts in Group */}
+                <div className="ml-2">
+                  {group.contracts.map((contract) => (
+                    <div 
+                      key={contract.id} 
+                      className="bg-white py-2 px-4 shadow-sm border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => handleCustomerClick(contract.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-base font-medium text-gray-900 truncate">
+                            {contract.studentName}
+                          </span>
+                          <span className="text-sm text-gray-400 truncate">
+                            (家長：{contract.parentName})
+                          </span>
+                          <span className="text-sm text-gray-500 truncate">
+                            {contract.product} | {getStatusText(contract.status)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          {contract.startDate && (
+                            <span className="text-xs text-gray-400">
+                              {contract.startDate.toDate().toLocaleDateString('zh-TW')}
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => handleCall(contract.phone, e)}
+                            className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors"
+                          >
+                            📞
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
