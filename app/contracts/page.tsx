@@ -148,7 +148,7 @@ export default function ContractsPage() {
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
       <div className="bg-white shadow-sm p-4">
-        <h1 className="text-2xl font-bold text-slate-800">我的客戶列表 (v2.0)</h1>
+        <h1 className="text-2xl font-bold text-slate-800">我的客戶列表</h1>
       </div>
 
       {/* Search Bar */}

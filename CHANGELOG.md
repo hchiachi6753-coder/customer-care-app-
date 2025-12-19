@@ -151,6 +151,28 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.2.1] - 2024-12-20
+
+### Fixed
+- **TypeScript 編譯錯誤修復**
+  - 在 Contract 和 Task 介面中新增 `createdAt?: Timestamp` 欄位
+  - 在 TaskStatus 類型中新增 `'todo'` 狀態支援
+  - 修正 allContractTasks 的類型轉換問題
+  - 確保所有 TypeScript 類型檢查通過
+
+### Changed
+- **UI 調整**
+  - 移除客戶列表標題中的版本標示 (v2.0)
+  - 清理不必要的版本資訊顯示
+
+### Technical
+- **部署準備**
+  - 解決所有編譯時期錯誤
+  - 確保專案可以成功建置和部署
+  - 完成生產環境準備
+
+---
+
 ## Future Releases
 
 ### Planned Features

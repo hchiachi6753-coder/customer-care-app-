@@ -233,7 +233,7 @@ export default function TaskCompletionModal({
                       input.click();
                     }, 10);
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none cursor-pointer bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none cursor-pointer bg-white text-gray-900"
                 />
               </div>
             ) : (
@@ -242,7 +242,8 @@ export default function TaskCompletionModal({
                 type="date"
                 value={nextContactDate}
                 onChange={(e) => setNextContactDate(e.target.value)}
-                className="w-full px-3 py-2 border border-red-500 rounded-lg focus:ring-2 focus:border-red-500 focus:ring-red-200 outline-none"
+                onClick={(e) => e.currentTarget.showPicker()}
+                className="w-full px-3 py-2 border border-red-500 rounded-lg focus:ring-2 focus:border-red-500 focus:ring-red-200 outline-none bg-white text-gray-900"
                 required
               />
             )}
