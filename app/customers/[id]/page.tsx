@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import CreateTaskModal from "@/components/CreateTaskModal";
 import { Task } from "@/types/schema";
 import { useRouter } from "next/navigation";
 
@@ -30,6 +31,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const [allTasks, setAllTasks] = useState<TaskWithId[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -64,6 +66,50 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
     fetchData();
   }, [resolvedParams.id]);
+
+  const handleCreateTask = async (date: string, note: string) => {
+    if (!task) return;
+    
+    try {
+      await addDoc(collection(db, "tasks"), {
+        contractId: task.contractId,
+        agentId: "temp-agent-id",
+        clientName: task.clientName,
+        parentName: task.parentName,
+        product: task.product,
+        email: task.email,
+        lineId: task.lineId,
+        dueDate: Timestamp.fromDate(new Date(date.replace(/-/g, '/'))),
+        taskType: 'monthly_care',
+        isCompleted: false,
+        status: 'pending',
+        priority: 'normal',
+        isSystemGenerated: false,
+        completionNote: note,
+        createdAt: Timestamp.now()
+      });
+      
+      setIsCreateModalOpen(false);
+      
+      // Refresh tasks list
+      const tasksQuery = query(
+        collection(db, "tasks"),
+        where("contractId", "==", task.contractId)
+      );
+      const tasksSnapshot = await getDocs(tasksQuery);
+      const contractTasks = tasksSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as TaskWithId[];
+      
+      setAllTasks(contractTasks);
+      buildTimeline(contractTasks);
+      
+    } catch (error) {
+      console.error('Error creating task:', error);
+      alert('建立任務失敗，請重試');
+    }
+  };
 
   const buildTimeline = (tasks: TaskWithId[]) => {
     const events: TimelineEvent[] = [];
@@ -285,7 +331,15 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
         {/* Section B: Care History Timeline */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">關懷歷程</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">關懷歷程</h2>
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+            >
+              ＋ 新增待辦
+            </button>
+          </div>
           <div className="relative">
             {/* Vertical Line */}
             <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
@@ -371,6 +425,13 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
       </div>
+      
+      {/* Create Task Modal */}
+      <CreateTaskModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onConfirm={handleCreateTask}
+      />
     </div>
   );
 }
