@@ -27,10 +27,20 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           
-          {/* 左側：Logo (手機版只顯示「客戶關懷」以節省空間) */}
+          {/* 左側：首頁按鈕 (已優化成按鈕型態) */}
           <div className="flex-shrink-0 flex items-center">
-            <Link href="/" className="text-lg sm:text-xl font-bold text-gray-800 tracking-tight">
-              客戶關懷<span className="hidden xs:inline">系統</span>
+            <Link 
+              href="/" 
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors group"
+              title="回到首頁"
+            >
+              {/* 小房子 Icon - 滑鼠移過去會稍微放大 */}
+              <span className="text-lg group-hover:scale-110 transition-transform">🏠</span>
+              
+              {/* 文字部分 */}
+              <span className="text-lg sm:text-xl font-bold tracking-tight">
+                客戶關懷<span className="hidden xs:inline">系統</span>
+              </span>
             </Link>
           </div>
 
@@ -44,13 +54,12 @@ export default function Navbar() {
                 className="flex items-center justify-center bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors rounded-lg px-2 py-2 sm:px-3"
                 title="團隊管理"
               >
-                {/* 手機/電腦都顯示齒輪，電腦版才多顯示文字 */}
                 <span className="text-lg">⚙️</span>
                 <span className="hidden md:inline ml-2 font-medium text-sm">團隊管理</span>
               </Link>
             )}
 
-            {/* 2. 名字顯示 (已移除 Hi 和職稱) */}
+            {/* 2. 名字顯示 */}
             <div className="text-sm font-medium text-gray-700 truncate max-w-[100px] sm:max-w-none text-right">
               {profile?.name || 'User'}
             </div>
