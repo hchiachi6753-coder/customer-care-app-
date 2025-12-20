@@ -116,19 +116,6 @@ export default function LoginPage() {
               {loading ? '登入中...' : '登入系統'}
             </button>
           </form>
-
-          {/* Setup Link */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              首次使用？{' '}
-              <button
-                onClick={() => router.push('/setup')}
-                className="text-blue-600 hover:text-blue-700 font-medium"
-              >
-                系統初始化
-              </button>
-            </p>
-          </div>
         </div>
       </div>
     </div>
