@@ -45,6 +45,14 @@ export default function Navbar() {
 
         {/* Right: User Info & Logout */}
         <div className="flex items-center gap-4">
+          {profile.role === 'director' && (
+            <button
+              onClick={() => router.push('/admin/team')}
+              className="px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors font-medium"
+            >
+              ⚙️ 團隊管理
+            </button>
+          )}
           <span className="text-gray-700">
             👋 Hi, {profile.name} ({getRoleLabel(profile.role)})
           </span>

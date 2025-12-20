@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TaskCompletionModal from "@/components/TaskCompletionModal";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface TaskWithId extends Task {
   id: string;
@@ -20,14 +21,36 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [schedulePreview, setSchedulePreview] = useState<{ manualTasks: any[], systemTask: any | null } | null>(null);
   const router = useRouter();
+  const { user, profile } = useAuth();
 
   useEffect(() => {
-    const q = query(
-      collection(db, "tasks"),
-      where("agentId", "==", "temp-agent-id")
-    );
+    // Wait for user profile to load
+    if (!profile) {
+      setLoading(true);
+      return;
+    }
 
-    const unsubscribe = onSnapshot(q, 
+    // Build query based on user role
+    let tasksQuery;
+    
+    if (profile.role === 'sales') {
+      // Sales: Only own tasks
+      tasksQuery = query(
+        collection(db, "tasks"),
+        where("ownerId", "==", user!.uid)
+      );
+    } else if (profile.role === 'manager') {
+      // Manager: Team tasks
+      tasksQuery = query(
+        collection(db, "tasks"),
+        where("teamId", "==", profile.teamId)
+      );
+    } else {
+      // Director: All tasks
+      tasksQuery = query(collection(db, "tasks"));
+    }
+
+    const unsubscribe = onSnapshot(tasksQuery, 
       (snapshot) => {
         const tasksData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -44,7 +67,7 @@ export default function Home() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [profile, user]);
 
   // Get today's date string (YYYY-MM-DD)
   const getTodayString = () => {
