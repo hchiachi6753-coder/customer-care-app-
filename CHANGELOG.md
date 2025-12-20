@@ -249,6 +249,77 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.2.0] - 2024-12-20
+
+### 🚀 **Phase 3 & 4 實作完成 - RBAC 權限與團隊管理系統**
+
+#### **✅ Phase 3: 權限過濾器 (RBAC Data Filter)**
+- **實作檔案**: `app/page.tsx`
+- **權限邏輯實作**:
+  - **Sales (業務)**: `where('ownerId', '==', user.uid)` - 僅讀取自己的客戶
+  - **Manager (主管)**: `where('teamId', '==', userProfile.teamId)` - 讀取同團隊所有成員的客戶
+  - **Director (總監)**: `fetch all` - 無條件讀取全公司資料
+- **狀態**: ✅ 已實裝並測試通過
+
+#### **✅ Phase 4: 後端引擎與 API (Backend Infrastructure)**
+- **核心技術**: 導入 `firebase-admin` SDK (Server-side)
+- **API 路徑**: `app/api/admin/create-user/route.ts`
+- **功能特色**:
+  - 雙重寫入：同時建立 Authentication 帳號與 Firestore 使用者檔案
+  - 防呆機制：自動檢查 Email 重複、密碼長度
+  - Singleton 模式：防止 Next.js 熱重載時造成 Admin SDK 重複初始化崩潰
+- **環境變數新增**:
+  - `FIREBASE_PROJECT_ID`: `customer-care-v1`
+  - `FIREBASE_CLIENT_EMAIL`: `firebase-adminsdk-fbsvc@customer-care-v1.iam.gserviceaccount.com`
+  - `FIREBASE_PRIVATE_KEY`: 完整私鑰配置
+  - 解決 Vercel 環境下私鑰換行符號 (`\n`) 的解析問題
+
+### 👥 **團隊管理後台 (Team Management Dashboard)**
+- **實作檔案**: `app/admin/team/page.tsx`
+- **權限保護**: 僅限 `role === 'director'` 進入，其他人自動重導向首頁
+- **新增成員表單**:
+  - 支援姓名、Email、密碼、角色、團隊設定
+  - 固定團隊選單 (Team 1 ~ Team 5) 防止輸入錯誤
+  - 前端密碼長度檢查 (至少 6 碼)
+- **成員列表功能**:
+  - 從 Firestore `users` 集合讀取所有用戶
+  - 按建立時間降序排列
+  - 角色標籤顏色區分 (總監/主管/業務)
+  - 團隊名稱友善顯示
+  - 即時更新：新增成功後自動刷新列表
+
+### 🎨 **UI/UX 優化與手機版適配**
+- **實作檔案**: `components/Navbar.tsx`
+- **導航列優化**:
+  - **品牌按鈕化**: 左上角 Logo 改為淡藍色按鈕樣式 + 🏠 房子圖示
+  - **手機版精簡**: 隱藏過長招呼語，僅保留姓名與圖示
+  - **響應式設計**: 優化按鈕間距與排版，防止擁擠
+  - **視覺回饋**: 加入 Hover 效果與縮放動畫
+- **團隊管理按鈕**:
+  - 紫色主題突出管理功能
+  - 手機版僅顯示齒輪圖示，桌面版顯示完整文字
+  - 僅對總監角色顯示
+
+### ☁️ **部署配置 (Deployment)**
+- **平台**: Vercel
+- **環境變數設定**: 修正 `FIREBASE_PRIVATE_KEY` 在 Vercel 介面上的格式問題
+- **網域授權**: Firebase Console 將 Vercel 網域加入白名單
+- **驗收結果**: 線上版功能運作正常，API 呼叫成功
+
+### 🔧 **技術改進**
+- **AuthContext 更新**: 支援 `profile` 物件存取用戶角色資訊
+- **ProtectedRoute 組件**: 統一的路由保護機制
+- **錯誤處理**: 完善的 API 錯誤處理和用戶反饋
+- **狀態管理**: 分離表單提交和列表載入狀態
+- **類型安全**: 完整的 TypeScript 類型定義
+
+### 📊 **資料庫架構**
+- **users 集合**: 儲存用戶基本資料、角色、團隊歸屬
+- **權限欄位**: `role` (sales/manager/director), `teamId`, `createdAt`
+- **查詢優化**: 基於角色的條件查詢，確保資料隔離
+
+---
+
 ## Future Releases
 
 ### Planned Features

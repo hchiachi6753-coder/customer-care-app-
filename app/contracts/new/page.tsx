@@ -1,11 +1,12 @@
 "use client";
 
 import { useForm } from "react-hook-form";
-import { addDoc, collection, Timestamp } from "firebase/firestore";
+import { addDoc, collection, Timestamp, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Contract, ContractType } from "@/types/schema";
+import { ContractType } from "@/types/schema";
+import { useAuth } from "@/contexts/AuthContext"; // 1. 引入 useAuth
 
 interface FormData {
   parentName: string;
@@ -26,6 +27,10 @@ interface FormData {
 export default function NewContractPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  
+  // 修正：使用 userProfile 而不是 profile
+  const { user, userProfile } = useAuth(); 
+
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     defaultValues: {
       type: "new",
@@ -59,11 +64,19 @@ export default function NewContractPage() {
   }, [watchStartDate, setValue]);
 
   const onSubmit = async (data: FormData) => {
+    if (!user) {
+        alert("請先登入");
+        return;
+    }
+
     setIsLoading(true);
     try {
       const contractData: any = {
         contractNo: `C-${Date.now()}`,
-        agentId: "temp-agent-id", // TODO: Get from auth
+        
+        // ✨ 優化：直接使用業務的名字或 ID
+        agentId: user.uid, 
+        
         parentName: data.parentName,
         studentName: data.studentName,
         phone: data.phone,
@@ -78,15 +91,23 @@ export default function NewContractPage() {
         noviceDate: Timestamp.fromDate(new Date(data.noviceDate)),
         firstLessonDate: Timestamp.fromDate(new Date(data.firstLessonDate)),
         note: data.note || null,
-        status: "active"
+        status: "active",
+        
+        // 🛑 權限控制核心：擁有者 ID 與 團隊 ID
+        ownerId: user.uid,                 // 誰建立的？
+        teamId: userProfile?.teamId || "main_team", // 屬於哪個團隊？(若無則預設 main_team)
+        
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
 
       await addDoc(collection(db, "contracts"), contractData);
       alert("成功建立合約！");
       router.push("/");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Firebase error:", error);
-      alert(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      // 這裡會顯示具體的錯誤，例如 "Missing or insufficient permissions"
+      alert(`Error: ${error.message || String(error)}`);
     } finally {
       setIsLoading(false);
     }
