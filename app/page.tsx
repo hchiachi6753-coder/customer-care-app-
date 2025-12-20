@@ -7,6 +7,7 @@ import { Task, TaskType } from "@/types/schema";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TaskCompletionModal from "@/components/TaskCompletionModal";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface TaskWithId extends Task {
   id: string;
@@ -349,7 +350,8 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-slate-50 pb-20">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200 p-4">
         <div className="max-w-4xl mx-auto">
@@ -438,6 +440,7 @@ export default function Home() {
         taskTitle={selectedTask ? `${selectedTask.clientName} - ${selectedTask.taskType === 'onboarding' ? '新手關懷' : selectedTask.taskType === 'first_lesson' ? '首課關懷' : '月度關懷'}` : ''}
         schedulePreview={schedulePreview}
       />
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

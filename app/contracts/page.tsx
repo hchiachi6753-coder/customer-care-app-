@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import { Contract } from "@/types/schema";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface ContractWithId extends Contract {
   id: string;
@@ -145,7 +146,8 @@ export default function ContractsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
       <div className="bg-white shadow-sm p-4">
         <h1 className="text-2xl font-bold text-slate-800">我的客戶列表</h1>
@@ -241,6 +243,7 @@ export default function ContractsPage() {
           </Link>
         </div>
       </div>
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }
