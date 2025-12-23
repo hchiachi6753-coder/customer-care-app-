@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
 interface UserProfile {
@@ -47,38 +47,47 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setLoading(true);
       
       if (firebaseUser) {
-        try {
-          // Fetch user profile from Firestore
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setProfile({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              name: userData.name || '',
-              role: userData.role || 'sales',
-              teamId: userData.teamId || ''
-            });
-          } else {
-            // User exists in Auth but not in Firestore
-            setProfile(null);
-          }
-          
-          setUser(firebaseUser);
-        } catch (error) {
-          console.error('Error fetching user profile:', error);
-          setProfile(null);
-          setUser(firebaseUser);
+        const emailKey = firebaseUser.email!.toLowerCase().trim();
+        
+        // 1. 先用 UID 找 (正式帳號)
+        let userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+        
+        // 2. 找不到，改用 Email 找 (總監預建名單)
+        if (!userDoc.exists()) {
+          userDoc = await getDoc(doc(db, "users", emailKey));
         }
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          
+          // 💡 確保設定正確的 TypeScript 類型結構
+          setProfile({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            name: userData.name || '',
+            role: userData.role || 'sales',
+            teamId: userData.teamId || ''
+          });
+          
+          // 💡 自動對接：如果目前還是用 Email 登入，幫他更新成 UID 存檔，下次就更快
+          if (userDoc.id === emailKey) {
+            await setDoc(doc(db, "users", firebaseUser.uid), {
+              ...userData,
+              uid: firebaseUser.uid,
+              status: "active"
+            });
+          }
+        } else {
+          setProfile(null); // 真的沒資料才失敗
+        }
+        
+        setUser(firebaseUser);
       } else {
         setUser(null);
         setProfile(null);
       }
-      
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
