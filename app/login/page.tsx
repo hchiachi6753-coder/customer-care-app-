@@ -19,24 +19,51 @@ export default function V2SmartLoginPage() {
 
     try {
       // 1. 嘗試直接登入
-      await signInWithEmailAndPassword(auth, lowEmail, password);
+      const userCredential = await signInWithEmailAndPassword(auth, lowEmail, password);
+
+      // 💡 同步 UID 到 User Doc (修復 Dynamic Mapping 必需)
+      try {
+        const { setDoc, doc, serverTimestamp } = await import("firebase/firestore");
+        await setDoc(doc(db, "users", lowEmail), {
+          uid: userCredential.user.uid,
+          lastLoginAt: serverTimestamp()
+        }, { merge: true });
+      } catch (e) {
+        console.error("UID Sync Failed:", e);
+        // Non-blocking
+      }
+
       router.push("/v2");
     } catch (error: any) {
       console.log("登入錯誤:", error.code, error.message);
-      
+
       // 2. 如果登入失敗，判斷是否為「尚未註冊的新成員」
       if (error.code === "auth/user-not-found" || error.code === "auth/invalid-credential") {
-        
+
         try {
           // 檢查 Firestore 是否有總監預建的「紙條」
           const emailDoc = await getDoc(doc(db, "users", lowEmail));
           console.log("預建資料檢查:", emailDoc.exists());
-          
+
           if (emailDoc.exists()) {
-            // 💡 關鍵：發現是預建名單，自動幫他註冊！
+            // 💡 關鍵：發現是預建名單，先檢查密碼是否正確！
+            if (emailDoc.data().password !== password) {
+              alert("初始密碼錯誤！請確認總監提供的密碼是否正確。");
+              return;
+            }
+
             console.log("找到預建資料，正在自動註冊...");
             try {
               await createUserWithEmailAndPassword(auth, lowEmail, password);
+
+              // 💡 註冊成功後，將狀態改為 active，並移除明文密碼以策安全
+              // 使用 setDoc merge 來更新
+              const { setDoc } = await import("firebase/firestore"); // 動態引入避免上方 import 衝突或沒引入
+              await setDoc(doc(db, "users", lowEmail), {
+                status: "active",
+                // password: deleteField() // 考慮到總監可能想看，先暫時保留，或者之後再決定是否刪除
+              }, { merge: true });
+
               console.log("註冊成功，正在跳轉...");
               alert("首次登入成功！已為您開通權限。");
               router.push("/v2");
@@ -78,7 +105,7 @@ export default function V2SmartLoginPage() {
         <form onSubmit={handleSmartLogin} className="space-y-6">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Email 帳號</label>
-            <input 
+            <input
               type="email" required placeholder="example@gmail.com"
               className="w-full p-4 border-2 border-gray-200 rounded-2xl text-gray-900 font-bold focus:border-orange-500 outline-none transition-all"
               value={email} onChange={e => setEmail(e.target.value)}
@@ -87,21 +114,21 @@ export default function V2SmartLoginPage() {
 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">登入密碼</label>
-            <input 
+            <input
               type="password" required placeholder="請輸入密碼"
               className="w-full p-4 border-2 border-gray-200 rounded-2xl text-gray-900 font-bold focus:border-orange-500 outline-none transition-all"
               value={password} onChange={e => setPassword(e.target.value)}
             />
           </div>
 
-          <button 
+          <button
             type="submit" disabled={loading}
             className={`w-full ${loading ? 'bg-gray-400' : 'bg-orange-500 hover:bg-orange-600'} text-white py-5 rounded-2xl font-black shadow-lg shadow-orange-200 transition-all active:scale-95 text-lg`}
           >
             {loading ? "處理中..." : "登入系統"}
           </button>
         </form>
-        
+
         <p className="mt-8 text-center text-xs text-gray-400 font-medium">
           © 2025 CRM V2 版權所有
         </p>

@@ -2,426 +2,517 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy, Timestamp, updateDoc, doc, serverTimestamp, addDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp, getDoc, arrayUnion } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import { MessageCircle, Phone, User, Calendar as CalendarIcon, AlertTriangle, ChevronRight, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
 
 export default function V2Dashboard() {
-  const { user, profile } = useAuth(); // 使用修正後的 profile
+  const { user, profile } = useAuth();
   const router = useRouter();
   const [tasks, setTasks] = useState<any[]>([]);
-  const [filterDays, setFilterDays] = useState(0); // 0=今日, 3=三天, 7=一週, 30=一個月
   const [loading, setLoading] = useState(true);
+
+  // Director Hierarchical State
+  const [teamGroups, setTeamGroups] = useState<{ [key: string]: any[] }>({});
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+
+  // Date Filter State
+  const [filterRange, setFilterRange] = useState("today");
+
+  // States for Modals
+  const [selectedTask, setSelectedTask] = useState<any>(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [activeTask, setActiveTask] = useState<any>(null); // 改成存儲整個任務物件，方便抓 contractId
-  const [feedbackData, setFeedbackData] = useState({
-    contactStatus: "成功聯繫",
-    feedbackType: "none",
-    issueCategory: "",
-    isHighRenewal: false,
-    isHighMGM: false,
-    content: "",
-    nextFollowUpDate: ""
+
+  // New Feedback Data State
+  const [feedbackMain, setFeedbackMain] = useState<"success" | "fail">("success");
+  const [failReason, setFailReason] = useState<"no_answer" | "busy" | "inconvenient">("no_answer");
+  const [note, setNote] = useState("");
+  const [nextDate, setNextDate] = useState(getTodayDate());
+  const [noNextDate, setNoNextDate] = useState(false);
+
+  // Customer Tags (High Potential)
+  const [tags, setTags] = useState({
+    renewal: false,
+    referral: false
   });
 
-  // 💡 取得當前日期的工具函數
-  const getTodayDate = () => {
-    const today = new Date();
-    // 💡 確保取得的是當地時間的日期
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
+  function getTodayDate() {
+    const d = new Date();
+    // Use local YYYY-MM-DD to avoid UTC shift
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 
-  // 💡 開啟回報彈窗函數
-  const openFeedbackModal = (task: any) => {
-    setActiveTask(task);
-    setFeedbackData({
-      contactStatus: '成功聯繫', // 預設狀態
-      feedbackType: 'none',
-      content: '',
-      nextFollowUpDate: getTodayDate(), // 💡 這裡就是初始化：預設今天
-      issueCategory: '',
-      isHighRenewal: false,
-      isHighMGM: false
-    });
+  // Reset Modal State on Open
+  const handleTaskClick = (task: any) => {
+    setSelectedTask(task);
+    setFeedbackMain("success");
+    setFailReason("no_answer");
+    setNote("");
+    setNextDate(getTodayDate());
+    setNoNextDate(false);
+    setTags({ renewal: false, referral: false });
     setShowFeedbackModal(true);
   };
 
-  // 💡 狀態切換邏輯
-  const handleStatusChange = (status: string) => {
-    const isMandatory = status === "忙線" || status === "未接聽";
-
-    setFeedbackData(prev => ({
-      ...prev,
-      contactStatus: status,
-      feedbackType: status === '成功聯繫' ? prev.feedbackType : 'none',
-      // 💡 只要切換到忙線/未接，且目前沒填日期，就自動帶入「今天」
-      nextFollowUpDate: isMandatory && !prev.nextFollowUpDate
-        ? getTodayDate()
-        : prev.nextFollowUpDate
-    }));
-  };
-
   useEffect(() => {
-    const fetchTasks = async () => {
-      // 🔒 強化防護：確保 user、profile 和關鍵權限欄位都存在
-      if (!user || !profile || !profile.teamId || !profile.role) {
-        console.log("等待權限對接完成...");
-        return;
-      }
-
+    const fetchData = async () => {
+      if (!user || !profile) return;
       setLoading(true);
       try {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-
-        const endOfRange = new Date();
-        endOfRange.setDate(endOfRange.getDate() + filterDays);
-        endOfRange.setHours(23, 59, 59, 999);
-
         const tasksRef = collection(db, "tasks");
-        let baseQuery;
+        const usersRef = collection(db, "users");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        // 修改重點：抓取所有 status == "pending" 且 dueDate <= 篩選結束日期的任務
-        // 這樣不論是多早以前的逾期任務，只要還沒完成，都會出現在列表裡
-        const commonWheres = [
-          where("status", "==", "pending"),
-          where("dueDate", "<=", Timestamp.fromDate(endOfRange))
-        ];
+        let tasksSnapshot;
+        let usersSnapshot;
 
         if (profile.role === 'director') {
-          baseQuery = query(tasksRef, ...commonWheres, orderBy("dueDate", "asc"));
+          const [tSnap, uSnap] = await Promise.all([
+            getDocs(query(tasksRef, where("completed", "==", false))),
+            getDocs(query(usersRef))
+          ]);
+          tasksSnapshot = tSnap;
+          usersSnapshot = uSnap;
+
         } else if (profile.role === 'manager') {
-          baseQuery = query(tasksRef, ...commonWheres, where("teamId", "==", profile.teamId), orderBy("dueDate", "asc"));
+          tasksSnapshot = await getDocs(query(tasksRef, where("teamId", "==", profile.teamId), where("completed", "==", false)));
         } else {
-          baseQuery = query(tasksRef, ...commonWheres, where("ownerId", "==", user.uid), orderBy("dueDate", "asc"));
+          tasksSnapshot = await getDocs(query(tasksRef, where("ownerId", "==", user.uid), where("completed", "==", false)));
         }
 
-        const snapshot = await getDocs(baseQuery);
-        setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const fetchedTasks = tasksSnapshot.docs.map(doc => {
+          const data = doc.data();
+          let isOverdue = false;
+          if (data.dueDate) {
+            const due = data.dueDate.toDate ? data.dueDate.toDate() : new Date(data.dueDate);
+            due.setHours(0, 0, 0, 0);
+            if (due < today) isOverdue = true;
+          }
+          return { id: doc.id, ...data, isOverdue };
+        });
+
+        fetchedTasks.sort((a, b) => {
+          const dateA = a.dueDate?.toDate ? a.dueDate.toDate() : new Date(a.dueDate || 0);
+          const dateB = b.dueDate?.toDate ? b.dueDate.toDate() : new Date(b.dueDate || 0);
+          return dateA - dateB;
+        });
+
+        setTasks(fetchedTasks);
+
+        if (profile.role === 'director' && usersSnapshot) {
+          const uidToTeamMap: { [key: string]: string } = {};
+          const emailToTeamMap: { [key: string]: string } = {};
+
+          usersSnapshot.docs.forEach(uDoc => {
+            const uData = uDoc.data();
+            const uEmail = uDoc.id.toLowerCase();
+            const uTeamId = uData.teamId || "未分類團隊";
+
+            emailToTeamMap[uEmail] = uTeamId;
+            if (uData.uid) {
+              uidToTeamMap[uData.uid] = uTeamId;
+            }
+          });
+
+          const groups: any = {};
+          fetchedTasks.forEach(t => {
+            let assignedTeam = "未分類團隊";
+            if (t.ownerId && uidToTeamMap[t.ownerId]) {
+              assignedTeam = uidToTeamMap[t.ownerId];
+            } else if (t.ownerId && emailToTeamMap[t.ownerId?.toLowerCase()]) {
+              assignedTeam = emailToTeamMap[t.ownerId?.toLowerCase()];
+            } else if (t.teamId) {
+              assignedTeam = t.teamId;
+            }
+
+            if (!groups[assignedTeam]) groups[assignedTeam] = [];
+            groups[assignedTeam].push(t);
+          });
+          setTeamGroups(groups);
+        }
+
       } catch (e) {
-        console.error("查詢任務失敗:", e);
+        console.error("Fetch tasks error:", e);
       }
       setLoading(false);
     };
-    fetchTasks();
-  }, [user, profile, filterDays]);
+    fetchData();
+  }, [user, profile]);
 
-  // 實作提交函數 (與詳細頁邏輯一致)
   const submitFeedback = async () => {
-    if (!activeTask) return;
-
-    // 💡 只有這些狀況是「必填」日期
-    const isMandatory =
-      feedbackData.contactStatus === "忙線" ||
-      feedbackData.contactStatus === "未接聽" ||
-      feedbackData.feedbackType === "issue";
-
-    if (isMandatory && !feedbackData.nextFollowUpDate) {
-      alert("此狀況必須設定下次聯絡/追蹤日期");
-      return;
-    }
-
+    if (!selectedTask) return;
     try {
-      // 更新當前任務
-      await updateDoc(doc(db, "tasks", activeTask.id), {
-        status: "completed",
+      const resultDetail = feedbackMain === "success" ? "success" : failReason;
+      const statusLabel = feedbackMain === "success" ? "completed" : "failed";
+
+      // 1. Update Current Task
+      await updateDoc(doc(db, "tasks", selectedTask.id), {
+        completed: true,
         completedAt: serverTimestamp(),
-        contactStatus: feedbackData.contactStatus,
-        feedbackType: feedbackData.feedbackType,
-        issueCategory: feedbackData.issueCategory,
-        content: feedbackData.content,
-        isHighRenewal: feedbackData.isHighRenewal,
-        isHighMGM: feedbackData.isHighMGM
+        result: resultDetail,
+        note: note
       });
 
-      // 💡 只有在「忙線」、「未接聽」或「有反應問題」時，或者使用者明確設定了日期時，才新增下一次任務
-      // 但前端在「成功聯繫且無問題」時隱藏了日期欄位，所以我們要避免送出預設的日期
-      const shouldCreateFollowUp =
-        feedbackData.contactStatus !== "成功聯繫" ||
-        feedbackData.feedbackType === "issue";
+      // 2. Add Care Log
+      const logData = {
+        title: selectedTask.title,
+        dueDate: selectedTask.dueDate,
+        completedAt: serverTimestamp(),
+        status: statusLabel,
+        resultDetail: resultDetail,
+        note: note,
+        type: "care",
+        createdAt: serverTimestamp()
+      };
+      await addDoc(collection(db, `contracts/${selectedTask.contractId}/careLogs`), logData);
 
-      if (shouldCreateFollowUp && feedbackData.nextFollowUpDate) {
+      // 3. Update Contract (Tags) - Only if High Potential selected in Success
+      if (feedbackMain === "success") {
+        const updates: any = {};
+        if (tags.renewal) updates.highRenewalPotential = true;
+        if (tags.referral) updates.highReferralPotential = true;
+
+        if (Object.keys(updates).length > 0) {
+          await updateDoc(doc(db, "contracts", selectedTask.contractId), updates);
+        }
+      }
+
+      // 4. Create Follow-up Task
+      // - Success: Conditioned on !noNextDate
+      // - Fail: MANDATORY (Always create)
+      const shouldCreateTask = (feedbackMain === "success" && !noNextDate) || (feedbackMain === "fail");
+
+      if (shouldCreateTask && nextDate) {
+        const newTitle = `[關懷後續] ${selectedTask.title}`;
+        const safeStudentName = selectedTask.studentName || selectedTask.clientName || "";
+        const safeClientName = selectedTask.clientName || selectedTask.studentName || "";
+
         await addDoc(collection(db, "tasks"), {
-          contractId: activeTask.contractId,
-          taskType: "general",
-          title: (() => {
-            if (feedbackData.feedbackType === "issue") return `[問題追蹤] ${activeTask.clientName}`;
-
-            // 根據原任務類型給予更明確的標題
-            const prefixMap: { [key: string]: string } = {
-              'newbie': '新手關懷-後續',
-              'first_class': '首課關懷-後續',
-              'system': '系統推播-後續',
-              'general': '一般關懷'
-            };
-            const prefix = prefixMap[activeTask.taskType] || "下次關懷";
-            return `[${prefix}] ${activeTask.clientName}`;
-          })(),
-          dueDate: Timestamp.fromDate(new Date(feedbackData.nextFollowUpDate)),
+          title: newTitle,
+          dueDate: new Date(nextDate),
+          contractId: selectedTask.contractId,
+          ownerId: selectedTask.ownerId,
+          teamId: selectedTask.teamId,
+          studentName: safeStudentName,
+          clientName: safeClientName,
+          completed: false,
           status: "pending",
-          ownerId: user?.uid,
-          teamId: profile?.teamId,
-          clientName: activeTask.clientName,
-          createdAt: serverTimestamp(),
+          createdAt: serverTimestamp()
         });
       }
 
-      alert("回報成功！");
       setShowFeedbackModal(false);
-      // 重新抓取資料讓卡片消失
       window.location.reload();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert("提交失敗");
+    }
   };
 
-  // 渲染任務卡片
-  const renderTaskColumn = (title: string, type: string, bgColor: string, borderColor: string) => {
-    const filteredTasks = tasks.filter(t => t.taskType === type);
+  // --- KANBAN VIEW HELPER ---
+  const renderKanbanColumn = (title: string, taskList: any[], bgColor: string, textColor: string, borderColor: string) => (
+    <div className={`p-4 rounded-3xl ${bgColor} border-2 ${borderColor} min-w-[280px] flex-1 flex flex-col h-full`}>
+      <div className={`flex justify-between items-center mb-4 ${textColor}`}>
+        <h3 className="font-black text-lg">{title}</h3>
+        <span className="bg-white/60 px-2 py-1 rounded-lg text-xs font-bold">{taskList.length}</span>
+      </div>
 
-    // 修正逾期判斷邏輯：只比較日期，不比較時間
-    const isOverdue = (date: Date) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // 將今天的時間歸零
-      const checkDate = new Date(date);
-      checkDate.setHours(0, 0, 0, 0); // 將任務日期時間歸零
-
-      return checkDate < today; // 只有日期早於今天才算逾期
-    };
-
-    return (
-      <div className={`flex-1 min-w-[280px] p-4 rounded-xl border-2 ${bgColor} ${borderColor} min-h-[500px]`}>
-        <h2 className="font-bold text-lg mb-4 text-gray-800 flex justify-between">
-          {title} <span className="text-sm bg-white px-2 py-1 rounded-full border">{filteredTasks.length}</span>
-        </h2>
-        <div className="space-y-3">
-          {filteredTasks.map(task => {
-            const taskIsOverdue = isOverdue(task.dueDate.toDate());
-            return (
-              <div key={task.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 relative overflow-hidden">
-                {/* 逾期紅條標示 */}
-                {taskIsOverdue && <div className="absolute top-0 left-0 w-1 h-full bg-red-500" />}
-
-                <div className="flex justify-between items-start">
-                  <div className="flex flex-col">
-                    <button
-                      onClick={() => router.push(`/v2/contracts/${task.contractId}/edit`)} // 跳轉到編輯頁
-                      className="text-lg font-black text-gray-900 hover:text-blue-600 text-left transition-colors flex items-center gap-1"
-                    >
-                      {task.clientName}
-                      <span className="text-[10px] font-normal text-gray-400 italic">(點擊編輯)</span>
-                    </button>
-                    <span className="text-xs text-gray-400">{task.title}</span>
-                  </div>
-                  {taskIsOverdue && <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">逾期</span>}
+      <div className="space-y-3 overflow-y-auto pr-1 custom-scrollbar flex-1">
+        {taskList.length === 0 && (
+          <div className="text-center py-10 opacity-40 font-bold text-sm">此區無待辦事項</div>
+        )}
+        {taskList.map(task => (
+          <div
+            key={task.id}
+            onClick={() => handleTaskClick(task)}
+            className={`bg-white p-4 rounded-2xl shadow-sm border-2 transition-all active:scale-95 cursor-pointer hover:shadow-md ${task.isOverdue ? 'border-red-200 ring-2 ring-red-100' : 'border-transparent'}`}
+          >
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-400 text-xs">
+                  {(task.studentName || task.clientName)?.[0]}
                 </div>
-
-                <div className={`text-xs mt-1 font-medium ${taskIsOverdue ? 'text-red-500' : 'text-blue-600'}`}>
-                  📅 {task.dueDate?.toDate().toLocaleDateString()}
-                </div>
-
-                <div className="mt-3 flex justify-end">
-                  <button
-                    onClick={() => openFeedbackModal(task)}
-                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 shadow-sm transition-all font-bold"
-                  >
-                    執行關懷
-                  </button>
+                <div>
+                  <h4 className="font-bold text-gray-800 leading-none">{task.studentName || task.clientName}</h4>
+                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">{task.title}</p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
+              {task.isOverdue && <AlertTriangle size={16} className="text-red-500" />}
+            </div>
 
-  return (
-    <div className="p-6 bg-slate-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">關懷待辦清單 (V2)</h1>
-            <p className="text-gray-500">歡迎回來，{profile?.name} ({profile?.role})</p>
+            <div className="flex items-center justify-between text-[11px] font-bold text-gray-400 mt-3 pt-3 border-t border-gray-50">
+              <span className="flex items-center gap-1">
+                <CalendarIcon size={12} />
+                {task.dueDate?.toDate ? task.dueDate.toDate().toLocaleDateString() : task.dueDate}
+              </span>
+              {task.isOverdue && <span className="text-red-500">已逾期</span>}
+            </div>
           </div>
+        ))}
+      </div>
+    </div>
+  );
 
-          {/* 時間篩選按鈕 */}
-          <div className="flex bg-white p-1 rounded-lg shadow-sm border">
-            {[
-              { label: "今日", val: 0 },
-              { label: "3天內", val: 3 },
-              { label: "一週內", val: 7 },
-              { label: "一個月", val: 30 }
-            ].map(btn => (
+  // Director View: TEAM SELECTION
+  if (profile?.role === 'director' && selectedTeamId === null && !loading) {
+    return (
+      <div className="p-6 bg-slate-50 min-h-screen pb-24">
+        <div className="max-w-md mx-auto space-y-6">
+          <header>
+            <h1 className="text-2xl font-bold text-gray-900">待辦事項總覽 (總監模式)</h1>
+            <p className="text-gray-500">請選擇要檢視的團隊</p>
+          </header>
+
+          <div className="grid grid-cols-1 gap-4">
+            {Object.keys(teamGroups).length === 0 && (
+              <div className="text-center py-10 text-gray-400 font-bold border-2 border-dashed border-gray-200 rounded-2xl">
+                目前沒有任何待辦事項
+              </div>
+            )}
+            {Object.entries(teamGroups).map(([tid, teamTasks]) => (
               <button
-                key={btn.val}
-                onClick={() => setFilterDays(btn.val)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${filterDays === btn.val ? 'bg-blue-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}
+                key={tid}
+                onClick={() => setSelectedTeamId(tid)}
+                className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 flex items-center justify-between hover:border-blue-300 transition-all group"
               >
-                {btn.label}
+                <div className="text-left">
+                  <h3 className="text-xl font-black text-gray-900 mb-1">{tid}</h3>
+                  <p className="text-sm font-bold text-gray-400">待辦總數: {teamTasks.length} 筆</p>
+                </div>
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <ChevronRight size={24} />
+                </div>
               </button>
             ))}
           </div>
-        </header>
-
-        {/* 四大顏色板塊佈局 */}
-        <div className="flex flex-nowrap overflow-x-auto gap-4 pb-4 no-scrollbar">
-          {renderTaskColumn("新手關懷", "newbie", "bg-blue-50", "border-blue-200")}
-          {renderTaskColumn("首課關懷", "first_class", "bg-purple-50", "border-purple-200")}
-          {renderTaskColumn("系統推播", "system", "bg-green-50", "border-green-200")}
-          {renderTaskColumn("一般關懷", "general", "bg-amber-50", "border-amber-200")}
         </div>
       </div>
+    );
+  }
 
-      {/* 關懷回報彈窗 */}
-      {showFeedbackModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-8 rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold mb-6 text-gray-900 text-center">關懷執行回報</h3>
+  // --- FILTER LOGIC ---
+  let rawTasks = (profile?.role === 'director' && selectedTeamId)
+    ? teamGroups[selectedTeamId]
+    : tasks;
 
-            <div className="space-y-6">
-              {/* 1. 聯絡狀況 (最優先選擇) */}
-              <div>
-                <label className="block text-sm font-bold text-gray-500 mb-3">聯絡狀況</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {['成功聯繫', '忙線', '未接聽'].map(status => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => handleStatusChange(status)}
-                      className={`py-3 rounded-xl font-bold border-2 transition-all ${feedbackData.contactStatus === status
-                        ? 'border-blue-600 bg-blue-50 text-blue-600'
-                        : 'border-gray-100 bg-gray-50 text-gray-400'
-                        }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
-                </div>
-              </div>
+  const displayTasks = rawTasks.filter(task => {
+    if (filterRange === "all") return true;
+    if (!task.dueDate) return false;
 
-              {/* 2. 條件顯示：只有「成功聯繫」才顯示反饋與標記 */}
-              {feedbackData.contactStatus === "成功聯繫" ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-500 mb-3">客戶反饋</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setFeedbackData({ ...feedbackData, feedbackType: 'none', issueCategory: '' })}
-                        className={`py-3 rounded-xl font-bold border-2 transition-all ${feedbackData.feedbackType === 'none' ? 'border-green-600 bg-green-50 text-green-600' : 'border-gray-100 bg-gray-50 text-gray-400'}`}
-                      >
-                        無特別反饋
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFeedbackData({ ...feedbackData, feedbackType: 'issue' })}
-                        className={`py-3 rounded-xl font-bold border-2 transition-all ${feedbackData.feedbackType === 'issue' ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-100 bg-gray-50 text-gray-400'}`}
-                      >
-                        反應問題
-                      </button>
-                    </div>
-                  </div>
+    const due = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
 
-                  <div className="grid grid-cols-2 gap-3 p-2 bg-blue-50 rounded-2xl">
-                    <label className="flex items-center justify-center gap-2 p-3 cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4" checked={feedbackData.isHighRenewal} onChange={e => setFeedbackData({ ...feedbackData, isHighRenewal: e.target.checked })} />
-                      <span className="text-xs font-bold text-blue-800">高續約意願</span>
-                    </label>
-                    <label className="flex items-center justify-center gap-2 p-3 cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4" checked={feedbackData.isHighMGM} onChange={e => setFeedbackData({ ...feedbackData, isHighMGM: e.target.checked })} />
-                      <span className="text-xs font-bold text-blue-800">高推薦價值</span>
-                    </label>
-                  </div>
-                </>
-              ) : null}
+    const diffTime = due.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-              {/* 判斷是否顯示日期設定區塊 */}
-              {(feedbackData.contactStatus !== "成功聯繫" || feedbackData.feedbackType === "issue") && (
-                <div className={`p-4 rounded-2xl border-2 space-y-4 ${feedbackData.contactStatus === "成功聯繫" ? "bg-red-50 border-red-100" : "bg-orange-50 border-orange-100"
-                  }`}>
-                  <div>
-                    <label className="block text-xs font-bold mb-2 text-gray-700">
-                      {feedbackData.contactStatus === "成功聯繫" ? "設定下次追蹤日期 (必填)" : "設定下次聯絡日期 (必填)"}
-                    </label>
-                    <input
-                      type="date"
-                      className="w-full p-3 rounded-lg border-2 border-white text-gray-900 outline-none shadow-sm font-bold"
-                      value={feedbackData.nextFollowUpDate}
-                      onChange={e => setFeedbackData({ ...feedbackData, nextFollowUpDate: e.target.value })}
-                    />
-                    {feedbackData.feedbackType === "issue" && (
-                      <div className="mt-3">
-                        <label className="block text-xs font-bold text-red-800 mb-2">問題分類</label>
-                        <div className="flex flex-wrap gap-2">
-                          {['師資', '教材', '系統', '服務'].map(cat => (
-                            <button
-                              key={cat}
-                              type="button"
-                              onClick={() => setFeedbackData({ ...feedbackData, issueCategory: cat })}
-                              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${feedbackData.issueCategory === cat ? 'bg-red-600 text-white' : 'bg-white text-red-600 border border-red-200'}`}
-                            >
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+    if (filterRange === 'today') return diffDays <= 0;
+    if (filterRange === '3days') return diffDays <= 3;
+    if (filterRange === 'week') return diffDays <= 7;
+    if (filterRange === 'month') return diffDays <= 30;
+    return true;
+  });
 
-              {/* 成功聯繫且無問題時，提供選擇性日期設定 */}
-              {feedbackData.contactStatus === "成功聯繫" && feedbackData.feedbackType === "none" && (
-                <div className="p-4 bg-blue-50 rounded-2xl border-2 border-blue-100 space-y-3">
-                  <label className="block text-xs font-bold text-gray-700">下次聯絡/追蹤日期</label>
+  const viewTitle = (profile?.role === 'director' && selectedTeamId)
+    ? `${selectedTeamId} - 待辦看板`
+    : "待辦任務看板";
 
-                  <div className="flex items-center gap-3">
-                    {/* 左側：日期方格 */}
-                    <input
-                      type="date"
-                      disabled={!feedbackData.nextFollowUpDate}
-                      className={`flex-1 p-3 rounded-xl border-2 border-white text-gray-900 font-bold outline-none shadow-sm transition-all ${!feedbackData.nextFollowUpDate ? 'opacity-30 bg-gray-100' : 'opacity-100 bg-white'
-                        }`}
-                      value={feedbackData.nextFollowUpDate || ""}
-                      onChange={e => setFeedbackData({ ...feedbackData, nextFollowUpDate: e.target.value })}
-                    />
+  const showBackButton = profile?.role === 'director' && selectedTeamId;
 
-                    {/* 右側：不需設定勾選框 */}
-                    <div
-                      onClick={() => {
-                        const isChecking = !!feedbackData.nextFollowUpDate;
-                        setFeedbackData({
-                          ...feedbackData,
-                          nextFollowUpDate: isChecking ? "" : getTodayDate()
-                        });
-                      }}
-                      className="flex items-center gap-2 cursor-pointer whitespace-nowrap bg-white px-3 py-3 rounded-xl border border-blue-200 shadow-sm active:scale-95 transition-all"
-                    >
-                      <input
-                        type="checkbox"
-                        readOnly
-                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        checked={!feedbackData.nextFollowUpDate}
-                      />
-                      <span className="text-xs font-black text-blue-600">不需設定</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+  const tasksNewbie = displayTasks.filter(t => t.taskType === 'newbie');
+  const tasksFirst = displayTasks.filter(t => t.taskType === 'first_class');
+  const tasksSystem = displayTasks.filter(t => t.taskType === 'system');
+  const tasksGeneral = displayTasks.filter(t => !['newbie', 'first_class', 'system'].includes(t.taskType));
 
-              <textarea
-                placeholder="溝通內容摘要（選填）..."
-                className="w-full p-4 border-2 border-gray-100 rounded-2xl h-20 text-gray-900 focus:border-blue-500 outline-none"
-                value={feedbackData.content}
-                onChange={e => setFeedbackData({ ...feedbackData, content: e.target.value })}
-              />
+  return (
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen pb-24 overflow-x-hidden">
+      <header className="mb-8 space-y-6">
+        <div className="flex items-center gap-4">
+          {showBackButton && (
+            <button
+              onClick={() => setSelectedTeamId(null)}
+              className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-gray-200 border border-white text-gray-600 hover:scale-105 transition-transform"
+            >
+              <ArrowLeft size={24} />
+            </button>
+          )}
+          <div>
+            <h1 className="text-3xl font-black text-gray-900">{viewTitle}</h1>
+            <p className="text-gray-500 font-bold mt-1">
+              {loading ? "載入中..." : `今日需處理共 ${displayTasks.length} 件`}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'today', label: '今天' },
+            { id: '3days', label: '三天內' },
+            { id: 'week', label: '一週內' },
+            { id: 'month', label: '一個月內' },
+          ].map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => setFilterRange(opt.id)}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filterRange === opt.id
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {loading ? (
+        <div className="text-center py-20 text-gray-400 font-bold">載入中...</div>
+      ) : (
+        <div className="flex flex-col lg:flex-row gap-6 h-auto lg:h-[calc(100vh-250px)]">
+          {renderKanbanColumn("新手關懷", tasksNewbie, "bg-emerald-50/80", "text-emerald-800", "border-emerald-100")}
+          {renderKanbanColumn("首課關懷", tasksFirst, "bg-blue-50/80", "text-blue-800", "border-blue-100")}
+          {renderKanbanColumn("系統關懷", tasksSystem, "bg-purple-50/80", "text-purple-800", "border-purple-100")}
+          {renderKanbanColumn("一般關懷", tasksGeneral, "bg-orange-50/80", "text-orange-800", "border-orange-100")}
+        </div>
+      )}
+
+      {/* Updated Feedback Modal */}
+      {showFeedbackModal && selectedTask && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md p-6 rounded-t-[40px] sm:rounded-[40px] shadow-2xl animate-in slide-in-from-bottom max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-black text-gray-900 mb-6 text-center">任務回報</h3>
+
+            {/* Main Option Toggle */}
+            <div className="flex gap-4 mb-6">
+              <button
+                onClick={() => setFeedbackMain("success")}
+                className={`flex-1 py-4 rounded-2xl font-black text-lg border-2 transition-all flex flex-col items-center gap-1 ${feedbackMain === 'success' ? 'bg-green-50 border-green-500 text-green-700 shadow-lg' : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60'}`}
+              >
+                <CheckCircle size={32} />
+                聯繫成功
+              </button>
+              <button
+                onClick={() => setFeedbackMain("fail")}
+                className={`flex-1 py-4 rounded-2xl font-black text-lg border-2 transition-all flex flex-col items-center gap-1 ${feedbackMain === 'fail' ? 'bg-red-50 border-red-500 text-red-700 shadow-lg' : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60'}`}
+              >
+                <XCircle size={32} />
+                未聯繫成功
+              </button>
             </div>
 
-            <div className="flex gap-4 mt-8">
-              <button onClick={() => setShowFeedbackModal(false)} className="flex-1 py-4 text-gray-400 font-bold hover:bg-gray-50 rounded-2xl transition-colors">取消</button>
-              <button onClick={submitFeedback} className="flex-1 py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-transform active:scale-95">送出回報</button>
+            <div className="space-y-5">
+
+              {/* ------------- SCENARIO A: SUCCESS ------------- */}
+              {feedbackMain === "success" && (
+                <>
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 ml-1">備註說明</label>
+                    <textarea
+                      className="w-full h-24 bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-700 focus:border-green-500 outline-none mt-1 resize-none"
+                      placeholder="請記錄家長回饋..."
+                      value={note}
+                      onChange={e => setNote(e.target.value)}
+                    ></textarea>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-xs font-bold text-gray-400 ml-1">下次追蹤日期</label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                          checked={noNextDate}
+                          onChange={e => setNoNextDate(e.target.checked)}
+                        />
+                        <span className="text-xs font-bold text-green-600">不設定下次聯絡日</span>
+                      </label>
+                    </div>
+                    <input
+                      type="date"
+                      disabled={noNextDate}
+                      className={`w-full p-4 border-2 rounded-2xl font-bold mt-1 transition-colors ${noNextDate ? 'bg-gray-100 text-gray-300 border-gray-100' : 'bg-white border-green-200 text-gray-900 focus:border-green-500'}`}
+                      value={nextDate}
+                      onChange={e => setNextDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100">
+                    <label className="text-xs font-bold text-gray-400 ml-1 mb-2 block">客戶標記 (可複選)</label>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setTags({ ...tags, renewal: !tags.renewal })}
+                        className={`flex-1 py-3 px-2 rounded-xl border-2 font-bold text-sm transition-all ${tags.renewal ? 'bg-orange-50 border-orange-400 text-orange-600' : 'bg-white border-gray-200 text-gray-400'}`}
+                      >
+                        🔥 高續約可能
+                      </button>
+                      <button
+                        onClick={() => setTags({ ...tags, referral: !tags.referral })}
+                        className={`flex-1 py-3 px-2 rounded-xl border-2 font-bold text-sm transition-all ${tags.referral ? 'bg-blue-50 border-blue-400 text-blue-600' : 'bg-white border-gray-200 text-gray-400'}`}
+                      >
+                        👍 高推薦可能
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ------------- SCENARIO B: FAIL ------------- */}
+              {feedbackMain === "fail" && (
+                <>
+                  {/* Fail Reasons */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'no_answer', label: '未接聽' },
+                      { id: 'busy', label: '忙線中' },
+                      { id: 'inconvenient', label: '不方便' }
+                    ].map(r => (
+                      <button
+                        key={r.id}
+                        onClick={() => setFailReason(r.id as any)}
+                        className={`p-3 rounded-xl font-bold text-sm border-2 transition-all ${failReason === r.id ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-400'}`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 ml-1">備註說明</label>
+                    <textarea
+                      className="w-full h-24 bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-700 focus:border-red-500 outline-none mt-1 resize-none"
+                      placeholder="請輸入原因..."
+                      value={note}
+                      onChange={e => setNote(e.target.value)}
+                    ></textarea>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-red-500 ml-1 flex items-center gap-1">
+                      <AlertTriangle size={12} />
+                      下次聯絡日 (必填)
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full p-4 border-2 border-red-500 bg-red-50/10 rounded-2xl font-bold mt-1 text-gray-900 focus:ring-2 focus:ring-red-200 outline-none"
+                      value={nextDate}
+                      onChange={e => setNextDate(e.target.value)}
+                    />
+                    <p className="text-[10px] text-red-400 mt-1 font-bold ml-1">* 若未修改，系統將自動設為今日稍後再次追蹤</p>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-3 pt-6">
+                <button onClick={() => setShowFeedbackModal(false)} className="flex-1 py-4 bg-gray-100 text-gray-400 font-bold rounded-2xl">取消</button>
+                <button onClick={submitFeedback} className="flex-1 py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg shadow-blue-200 hover:bg-blue-700">確認送出</button>
+              </div>
             </div>
           </div>
         </div>
