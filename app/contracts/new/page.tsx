@@ -27,7 +27,7 @@ interface FormData {
 export default function NewContractPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { user, userProfile } = useAuth(); 
+  const { user, profile } = useAuth();
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     defaultValues: {
@@ -60,8 +60,8 @@ export default function NewContractPage() {
 
   const onSubmit = async (data: FormData) => {
     if (!user) {
-        alert("請先登入");
-        return;
+      alert("請先登入");
+      return;
     }
 
     setIsLoading(true);
@@ -69,7 +69,7 @@ export default function NewContractPage() {
       // 1. 準備合約資料
       const contractData: any = {
         contractNo: `C-${Date.now()}`,
-        agentId: user.uid, 
+        agentId: user.uid,
         parentName: data.parentName,
         studentName: data.studentName,
         phone: data.phone,
@@ -86,7 +86,7 @@ export default function NewContractPage() {
         note: data.note || null,
         status: "active",
         ownerId: user.uid,
-        teamId: userProfile?.teamId || "main_team",
+        teamId: profile?.teamId || "main_team",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -96,7 +96,7 @@ export default function NewContractPage() {
       console.log("合約建立成功，ID:", docRef.id);
 
       // 🛑 3. 自動產生「待辦任務 (tasks)」
-      
+
       // 任務 A: 新手關懷
       await addDoc(collection(db, "tasks"), {
         title: `新手關懷 - ${data.studentName}`,
@@ -107,7 +107,7 @@ export default function NewContractPage() {
         parentName: data.parentName,
         phone: data.phone,
         ownerId: user.uid,
-        teamId: userProfile?.teamId || "main_team",
+        teamId: profile?.teamId || "main_team",
         createdAt: serverTimestamp(),
       });
 
@@ -121,13 +121,13 @@ export default function NewContractPage() {
         parentName: data.parentName,
         phone: data.phone,
         ownerId: user.uid,
-        teamId: userProfile?.teamId || "main_team",
+        teamId: profile?.teamId || "main_team",
         createdAt: serverTimestamp(),
       });
 
       alert("成功建立合約，並已自動加入待辦事項！");
       router.push("/");
-      
+
     } catch (error: any) {
       console.error("Firebase error:", error);
       alert(`Error: ${error.message || String(error)}`);

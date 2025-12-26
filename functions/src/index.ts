@@ -1,11 +1,11 @@
-import {setGlobalOptions} from "firebase-functions";
-import {onDocumentCreated} from "firebase-functions/v2/firestore";
-import {initializeApp} from "firebase-admin/app";
-import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import { setGlobalOptions } from "firebase-functions";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { initializeApp } from "firebase-admin/app";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 
 // Import types
-import {Contract, Task, TaskType} from "./types/schema";
+import { Contract, Task, TaskType } from "./types/schema";
 
 initializeApp();
 const db = getFirestore();
@@ -47,8 +47,7 @@ export const onContractCreated = onDocumentCreated(
       taskType: 'onboarding' as TaskType,
       isCompleted: false,
       status: 'pending',
-      priority: 'normal',
-      isSystemGenerated: true
+      priority: 'normal'
     };
     const noviceRef = db.collection('tasks').doc();
     batch.set(noviceRef, noviceTask);
@@ -66,8 +65,7 @@ export const onContractCreated = onDocumentCreated(
       taskType: 'first_lesson' as TaskType,
       isCompleted: false,
       status: 'pending',
-      priority: 'normal',
-      isSystemGenerated: true
+      priority: 'normal'
     };
     const firstLessonRef = db.collection('tasks').doc();
     batch.set(firstLessonRef, firstLessonTask);
@@ -76,9 +74,9 @@ export const onContractCreated = onDocumentCreated(
     for (let i = 1; i <= 24; i++) {
       const baseDate = startDate.toDate();
       const dueDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, baseDate.getDate());
-      
+
       logger.info(`Creating monthly task ${i}: ${dueDate.toISOString()}`);
-      
+
       const monthlyTask: Omit<Task, 'id'> = {
         contractId,
         agentId,
@@ -91,10 +89,9 @@ export const onContractCreated = onDocumentCreated(
         taskType: 'monthly_care' as TaskType,
         isCompleted: false,
         status: 'pending',
-        priority: 'normal',
-        isSystemGenerated: true
+        priority: 'normal'
       };
-      
+
       const monthlyRef = db.collection('tasks').doc();
       batch.set(monthlyRef, monthlyTask);
     }

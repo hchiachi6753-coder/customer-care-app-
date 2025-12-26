@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 interface ContractData {
   id: string;
   contractNo?: string;
-  studentName: string; 
+  studentName: string;
   parentName: string;
   phone: string;
   email?: string;
@@ -51,8 +51,8 @@ interface TimelineEvent {
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const { user, userProfile } = useAuth();
-  
+  const { user, profile } = useAuth();
+
   const [contract, setContract] = useState<ContractData | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,18 +70,18 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           const data = docSnap.data();
           const currentContract = { id: docSnap.id, ...data } as ContractData;
           setContract(currentContract);
-          
+
           const tasksQuery = query(
             collection(db, "tasks"),
             where("contractId", "==", currentContract.id)
           );
-          
+
           const tasksSnapshot = await getDocs(tasksQuery);
           const contractTasks = tasksSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           })) as TaskWithId[];
-          
+
           buildTimeline(contractTasks);
         }
         setLoading(false);
@@ -96,7 +96,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   const handleCreateTask = async (date: string, note: string) => {
     if (!contract || !user) return;
-    
+
     try {
       await addDoc(collection(db, "tasks"), {
         contractId: contract.id,
@@ -115,12 +115,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         isSystemGenerated: false,
         completionNote: note,
         ownerId: user.uid,
-        teamId: userProfile?.teamId || "main_team",
+        teamId: profile?.teamId || "main_team",
         createdAt: Timestamp.now()
       });
-      
+
       setIsCreateModalOpen(false);
-      window.location.reload(); 
+      window.location.reload();
     } catch (error) {
       console.error('Error creating task:', error);
       alert('建立任務失敗，請重試');
@@ -130,7 +130,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const buildTimeline = (tasks: TaskWithId[]) => {
     const events: TimelineEvent[] = [];
     const today = new Date();
-    
+
     tasks.forEach(task => {
       if (!task.dueDate) return;
       const dueDate = task.dueDate.toDate();
@@ -138,7 +138,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       let title = task.title || '月度關懷';
       let icon = '🗓️';
       let color = 'purple';
-      
+
       if (task.taskType === 'novice_care' || task.taskType === 'newcomer') {
         eventType = 'newcomer';
         title = task.title || '新手關懷';
@@ -154,11 +154,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         icon = '📞';
         color = 'orange';
       }
-      
+
       let status: TimelineEvent['status'] = 'pending';
       if (task.isCompleted) status = 'completed';
       else if (dueDate < today) status = 'overdue';
-      
+
       events.push({
         id: task.id,
         date: dueDate,
@@ -173,7 +173,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         completionNote: task.completionNote
       });
     });
-    
+
     events.sort((a, b) => b.date.getTime() - a.date.getTime());
     setTimeline(events);
   };
@@ -198,9 +198,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium border border-blue-100">{contract.product}</span>
           </div>
           <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm text-gray-600">
-             <div className="col-span-2">📞 <a href={`tel:${contract.phone}`} className="text-blue-600">{contract.phone}</a></div>
-             {contract.email && <div className="col-span-2">✉️ {contract.email}</div>}
-             {contract.lineId && <div className="col-span-2">💬 Line: {contract.lineId}</div>}
+            <div className="col-span-2">📞 <a href={`tel:${contract.phone}`} className="text-blue-600">{contract.phone}</a></div>
+            {contract.email && <div className="col-span-2">✉️ {contract.email}</div>}
+            {contract.lineId && <div className="col-span-2">💬 Line: {contract.lineId}</div>}
           </div>
           {contract.note && <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">{contract.note}</div>}
         </div>
