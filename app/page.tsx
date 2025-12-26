@@ -8,10 +8,16 @@ import { useRouter } from "next/navigation";
 import { MessageCircle, Phone, User, Calendar as CalendarIcon, AlertTriangle, ChevronRight, ArrowLeft, CheckCircle, XCircle } from "lucide-react";
 
 export default function V2Dashboard() {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, authLoading, router]);
 
   // Director Hierarchical State
   const [teamGroups, setTeamGroups] = useState<{ [key: string]: any[] }>({});
@@ -85,7 +91,7 @@ export default function V2Dashboard() {
           tasksSnapshot = await getDocs(query(tasksRef, where("ownerId", "==", user.uid), where("completed", "==", false)));
         }
 
-        const fetchedTasks = tasksSnapshot.docs.map(doc => {
+        const fetchedTasks: any[] = tasksSnapshot.docs.map(doc => {
           const data = doc.data();
           let isOverdue = false;
           if (data.dueDate) {
@@ -142,7 +148,7 @@ export default function V2Dashboard() {
       setLoading(false);
     };
     fetchData();
-  }, [user, profile]);
+  }, [user, profile, authLoading]);
 
   const submitFeedback = async () => {
     if (!selectedTask) return;
