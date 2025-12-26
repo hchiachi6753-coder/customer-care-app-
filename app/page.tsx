@@ -113,27 +113,43 @@ export default function V2Dashboard() {
         if (profile.role === 'director' && usersSnapshot) {
           const uidToTeamMap: { [key: string]: string } = {};
           const emailToTeamMap: { [key: string]: string } = {};
+          const uidToNameMap: { [key: string]: string } = {}; // New: Map to store user names
 
           usersSnapshot.docs.forEach(uDoc => {
             const uData = uDoc.data();
             const uEmail = uDoc.id.toLowerCase();
             const uTeamId = uData.teamId || "未分類團隊";
+            // Prefer displayName, fallback to email prefix
+            const uName = uData.displayName || uData.name || uEmail.split('@')[0];
 
             emailToTeamMap[uEmail] = uTeamId;
             if (uData.uid) {
               uidToTeamMap[uData.uid] = uTeamId;
+              uidToNameMap[uData.uid] = uName; // Store name by UID
+            }
+            // Also store by email key just in case we need it, though ownerId usually is UID
+            if (uEmail) {
+              uidToNameMap[uEmail] = uName;
             }
           });
 
           const groups: any = {};
           fetchedTasks.forEach(t => {
             let assignedTeam = "未分類團隊";
+            // Map Team
             if (t.ownerId && uidToTeamMap[t.ownerId]) {
               assignedTeam = uidToTeamMap[t.ownerId];
             } else if (t.ownerId && emailToTeamMap[t.ownerId?.toLowerCase()]) {
               assignedTeam = emailToTeamMap[t.ownerId?.toLowerCase()];
             } else if (t.teamId) {
               assignedTeam = t.teamId;
+            }
+
+            // Map Name (New)
+            if (t.ownerId && uidToNameMap[t.ownerId]) {
+              t.ownerName = uidToNameMap[t.ownerId];
+            } else {
+              t.ownerName = "未知業務";
             }
 
             if (!groups[assignedTeam]) groups[assignedTeam] = [];
@@ -246,6 +262,12 @@ export default function V2Dashboard() {
                 <div>
                   <h4 className="font-bold text-gray-800 leading-none">{task.studentName || task.clientName}</h4>
                   <p className="text-[10px] text-gray-400 font-medium mt-0.5">{task.title}</p>
+                  {/* Show Owner Name for Director */}
+                  {task.ownerName && (
+                    <span className="inline-block mt-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[9px] rounded font-bold">
+                      {task.ownerName}
+                    </span>
+                  )}
                 </div>
               </div>
               {task.isOverdue && <AlertTriangle size={16} className="text-red-500" />}
