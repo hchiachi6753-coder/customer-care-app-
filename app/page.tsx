@@ -146,8 +146,9 @@ export default function V2Dashboard() {
             }
 
             // Map Name (New)
-            if (t.ownerId && uidToNameMap[t.ownerId]) {
-              t.ownerName = uidToNameMap[t.ownerId];
+            const targetId = t.ownerId || t.agentId; // Fallback to agentId
+            if (targetId && uidToNameMap[targetId]) {
+              t.ownerName = uidToNameMap[targetId];
             } else {
               t.ownerName = "未知業務";
             }
@@ -264,8 +265,8 @@ export default function V2Dashboard() {
                   <p className="text-[10px] text-gray-400 font-medium mt-0.5">{task.title}</p>
                   {/* Show Owner Name for Director */}
                   {task.ownerName && (
-                    <span className="inline-block mt-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[9px] rounded font-bold">
-                      {task.ownerName}
+                    <span className="inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-700 text-[10px] rounded-md font-bold">
+                      業務: {task.ownerName}
                     </span>
                   )}
                 </div>
